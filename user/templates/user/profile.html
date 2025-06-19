@@ -1,0 +1,13 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<section class="max-w-xl mx-auto py-10">
+    <h1 class="text-3xl font-semibold mb-6">👤 My Profile</h1>
+
+    <div class="bg-white shadow p-6 rounded-xl">
+        <p><strong>Name:</strong> {{ request.user.first_name }} {{ request.user.last_name }}</p>
+        <p><strong>Email:</strong> {{ request.user.email }}</p>
+        <p><strong>Username:</strong> {{ request.user.username }}</p>
+        <!-- Add more profile info here -->
+    </div>
+</section>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="max-w-4xl mx-auto p-4">
+  <h2 class="text-2xl font-semibold mb-4">My Wishlist</h2>
+
+  {% if wishlist_items %}
+  <ul class="space-y-4">
+    {% for item in wishlist_items %}
+    <li class="flex justify-between items-center border p-3">
+      <div class="flex gap-4 items-center">
+        <img src="{{ item.product.primary_image }}" alt="{{ item.product.name }}"
+          class="w-24 h-24 object-cover rounded-md">
+        <div>
+          <h3 class="font-bold">{{ item.product.name }}</h3>
+          <p>₹{{ item.product.price }}</p>
+        </div>
+      </div>
+      <div class="text-right">
+        <a href="{% url 'add_to_cart' item.product.id %}" class="text-green-600 hover:underline">Add to Cart</a> |
+        <a href="{% url 'remove_from_wishlist' item.product.id %}" class="text-red-600 hover:underline">Remove</a>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>No items in wishlist.</p>
+  {% endif %}
+</div>
+{% endblock %}

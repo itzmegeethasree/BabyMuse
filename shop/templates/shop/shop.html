@@ -1,0 +1,168 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="bg-gray-50 min-h-screen py-8">
+  <div class="container mx-auto px-4">
+    <h1 class="text-3xl font-bold mb-6 text-center text-pink-600">Shop BabyMuse Products</h1>
+
+    <!-- Search & Filters -->
+    <form method="get" class="mb-6 grid md:grid-cols-4 gap-4">
+      <input type="text" name="search" placeholder="Search products..." value="{{ search_query }}"
+        class="p-2 border border-gray-300 rounded-md col-span-1" />
+
+      <select name="category" class="p-2 border border-gray-300 rounded-md col-span-1">
+        <option value="">All Categories</option>
+        {% for cat in categories %}
+        {% if cat.id|stringformat:"s" == selected_category %}
+        <option value="{{ cat.id }}" selected>{{ cat.name }}</option>
+        {% else %}
+        <option value="{{ cat.id }}">{{ cat.name }}</option>
+        {% endif %}
+        {% endfor %}
+      </select>
+
+      <div class="flex space-x-2 col-span-1">
+        <input type="number" name="price_min" placeholder="Min" value="{{ price_min }}"
+          class="w-1/2 p-2 border border-gray-300 rounded-md" />
+        <input type="number" name="price_max" placeholder="Max" value="{{ price_max }}"
+          class="w-1/2 p-2 border border-gray-300 rounded-md" />
+      </div>
+
+      <select name="sort" class="p-2 border border-gray-300 rounded-md col-span-1">
+        <option value="">Sort By</option>
+
+        {% if sort_by == "price_low" %}
+        <option value="price_low" selected>Price: Low to High</option>
+        {% else %}
+        <option value="price_low">Price: Low to High</option>
+        {% endif %}
+
+        {% if sort_by == "price_high" %}
+        <option value="price_high" selected>Price: High to Low</option>
+        {% else %}
+        <option value="price_high">Price: High to Low</option>
+        {% endif %}
+
+        {% if sort_by == "name_asc" %}
+        <option value="name_asc" selected>A – Z</option>
+        {% else %}
+        <option value="name_asc">A – Z</option>
+        {% endif %}
+
+        {% if sort_by == "name_desc" %}
+        <option value="name_desc" selected>Z – A</option>
+        {% else %}
+        <option value="name_desc">Z – A</option>
+        {% endif %}
+      </select>
+
+      <div class="col-span-4 flex justify-end space-x-2">
+        <button type="submit"
+          class="px-4 py-2 bg-pink-600 text-white rounded hover:bg-pink-700 transition">Apply</button>
+        <a href="{% url 'shop' %}"
+          class="px-4 py-2 bg-gray-300 text-gray-800 rounded hover:bg-gray-400 transition">Clear</a>
+      </div>
+    </form>
+
+    <!-- Products Grid -->
+    {% if page_obj %}
+    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+      {% for product in page_obj %}
+      <div class="bg-white shadow rounded-lg overflow-hidden">
+        <a href="{% url 'product_detail' product.id %}">
+          {% if product.images.all %}<img src="{{ product.images.all.0.image.url }}" alt="{{ product.name }}"
+            class="w-full h-60 object-cover object-center rounded-md">
+
+          {% else %}
+          <img src="{% static 'images/default.jpg' %}" alt="No image"
+            class="w-full h-60 object-cover object-center rounded-md">
+
+          {% endif %}
+          <div class="p-4">
+            <h2 class="text-lg font-semibold text-gray-800">{{ product.name }}</h2>
+            <p class="text-pink-600 font-bold mt-2">₹{{ product.price }}</p>
+            <p class="text-gray-500 text-sm mt-1 truncate">{{ product.description }}</p>
+            <div class="flex gap-2 mt-2">
+              <a href="{% url 'add_to_wishlist' product.id %}"
+                class="bg-pink-100 text-pink-600 px-3 py-1 rounded hover:bg-pink-200">
+                ❤️ Wishlist
+              </a>
+              <button class="add-to-cart-btn bg-green-600 text-white px-3 py-1 rounded"
+                data-product-id="{{ product.id }}">
+                🛒 Add to Cart
+              </button>
+            </div>
+
+            {% if product.stock == 0 %}
+            <span class="text-red-500 font-medium text-sm">Out of Stock</span>
+            {% endif %}
+          </div>
+        </a>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div class="text-center text-gray-600 mt-10">No products found matching your criteria.</div>
+    {% endif %}
+
+    <!-- Pagination -->
+    <div class="mt-10 flex justify-center space-x-2">
+      {% if page_obj.has_previous %}
+      <a href="?{% if request.GET %}{{ request.GET.urlencode|cut:'page=' }}&{% endif %}page={{ page_obj.previous_page_number }}"
+        class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">&laquo; Prev</a>
+      {% endif %}
+
+      <span class="px-4 py-2 bg-pink-600 text-white rounded">{{ page_obj.number }} of
+        {{page_obj.page_number}}</span>
+
+      {% if page_obj.has_next %}
+      <a href="?{% if request.GET %}{{ request.GET.urlencode|cut:'page=' }}&{% endif %}page={{ page_obj.next_page_number }}"
+        class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">Next &raquo;</a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const cartButtons = document.querySelectorAll(".add-to-cart-btn");
+
+    cartButtons.forEach(btn => {
+      btn.addEventListener("click", function () {
+        const productId = this.dataset.productId;
+
+        fetch("{% url 'ajax_add_to_cart' %}", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": "{{ csrf_token }}",
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: `product_id=${productId}`
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.status === 'success') {
+              document.getElementById("cart-count").innerText = data.cart_count;
+              showToast("Item added to cart!");
+            } else {
+              showToast(data.message || "Failed to add.");
+            }
+          })
+          .catch(() => showToast("Error adding to cart"));
+      });
+    });
+
+    function showToast(message) {
+      const toast = document.createElement("div");
+      toast.innerText = message;
+      toast.className = "fixed top-5 right-5 bg-green-600 text-white px-4 py-2 rounded shadow z-50";
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = "0";
+        setTimeout(() => toast.remove(), 500);
+      }, 3000);
+    }
+  });
+</script>
+{% endblock %}
