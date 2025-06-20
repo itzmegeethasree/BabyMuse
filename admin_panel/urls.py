@@ -1,5 +1,7 @@
 from django.urls import path
 from . import views
+from .views import toggle_user_status
+
 
 app_name = 'admin_panel'
 
@@ -42,4 +44,7 @@ urlpatterns = [
     path('customers/', views.admin_customer_list, name='admin_customer_list'),
     path('customers/<int:customer_id>/',
          views.admin_view_customer, name='admin_view_customer'),
+    path('users/<int:user_id>/toggle/',
+         toggle_user_status, name='toggle_user_status'),
+
 ]

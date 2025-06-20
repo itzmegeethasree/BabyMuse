@@ -1,4 +1,5 @@
 {% extends 'core/base.html' %}
+{% load static %}
 {% block content %}
 <div class="max-w-4xl mx-auto p-4">
   <h2 class="text-2xl font-semibold mb-4">My Wishlist</h2>
@@ -15,9 +16,13 @@
           <p>₹{{ item.product.price }}</p>
         </div>
       </div>
-      <div class="text-right">
-        <a href="{% url 'add_to_cart' item.product.id %}" class="text-green-600 hover:underline">Add to Cart</a> |
-        <a href="{% url 'remove_from_wishlist' item.product.id %}" class="text-red-600 hover:underline">Remove</a>
+      <div class="text-right space-x-2">
+        <button class="add-to-cart-btn text-green-600 hover:underline" data-product-id="{{ item.product.id }}">
+          Add to Cart
+        </button>
+        <button class="remove-from-wishlist-btn text-red-600 hover:underline" data-product-id="{{ item.product.id }}">
+          Remove
+        </button>
       </div>
     </li>
     {% endfor %}
@@ -26,4 +31,71 @@
   <p>No items in wishlist.</p>
   {% endif %}
 </div>
+
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+    const csrfToken = "{{ csrf_token }}";
+
+    // ADD TO CART
+    document.querySelectorAll(".add-to-cart-btn").forEach(button => {
+      button.addEventListener("click", function () {
+        const productId = this.dataset.productId;
+
+        fetch("{% url 'ajax_add_to_cart' %}", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": csrfToken,
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: `product_id=${productId}`
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.status === 'success') {
+              document.getElementById("cart-count").innerText = data.cart_count;
+              showToast("Added to cart ✅");
+            } else {
+              showToast("Failed to add to cart ❌");
+            }
+          });
+      });
+    });
+
+    // REMOVE FROM WISHLIST
+    document.querySelectorAll(".remove-from-wishlist-btn").forEach(button => {
+      button.addEventListener("click", function () {
+        const productId = this.dataset.productId;
+
+        fetch("{% url 'ajax_remove_from_wishlist' %}", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": csrfToken,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ product_id: productId })
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.status === 'success') {
+              this.closest('li').remove();
+              showToast("Removed from wishlist 🗑️");
+            } else {
+              showToast("Error removing item");
+            }
+          });
+      });
+    });
+
+    function showToast(msg) {
+      const toast = document.createElement("div");
+      toast.innerText = msg;
+      toast.className = "fixed top-5 right-5 bg-green-600 text-white px-4 py-2 rounded shadow z-50";
+      document.body.appendChild(toast);
+      setTimeout(() => {
+        toast.style.opacity = "0";
+        setTimeout(() => toast.remove(), 500);
+      }, 3000);
+    }
+  });
+</script>
 {% endblock %}

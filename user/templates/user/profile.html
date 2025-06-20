@@ -4,10 +4,57 @@
     <h1 class="text-3xl font-semibold mb-6">👤 My Profile</h1>
 
     <div class="bg-white shadow p-6 rounded-xl">
-        <p><strong>Name:</strong> {{ request.user.first_name }} {{ request.user.last_name }}</p>
-        <p><strong>Email:</strong> {{ request.user.email }}</p>
-        <p><strong>Username:</strong> {{ request.user.username }}</p>
-        <!-- Add more profile info here -->
+        {% if messages %}
+        {% for message in messages %}
+        <p class="text-green-600 mb-2">{{ message }}</p>
+        {% endfor %}
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data" class="space-y-4">
+            {% csrf_token %}
+
+            <!-- 🖼️ Profile Image -->
+            {% if user.profile_image %}
+            <img src="{{ user.profile_image.url }}" alt="Profile Image"
+                class="w-24 h-24 object-cover rounded-full shadow">
+            {% else %}
+            <p class="text-gray-500">No profile image uploaded.</p>
+            {% endif %}
+
+            <label class="block">
+                <span class="text-gray-700">Change Profile Image</span>
+                <input type="file" name="profile_image" class="w-full border px-3 py-2 rounded">
+            </label>
+
+            <label class="block">
+                <span class="text-gray-700">First Name</span>
+                <input type="text" name="first_name" value="{{ user.first_name }}"
+                    class="w-full border px-3 py-2 rounded" />
+            </label>
+
+            <label class="block">
+                <span class="text-gray-700">Last Name</span>
+                <input type="text" name="last_name" value="{{ user.last_name }}"
+                    class="w-full border px-3 py-2 rounded" />
+            </label>
+
+            <label class="block">
+                <span class="text-gray-700">Email</span>
+                <input type="email" name="email" value="{{ user.email }}" class="w-full border px-3 py-2 rounded" />
+            </label>
+
+            <label class="block">
+                <span class="text-gray-700">Phone Number</span>
+                <input type="text" name="phone" value="{{ user.phone }}" class="w-full border px-3 py-2 rounded" />
+            </label>
+
+            <div class="flex justify-between items-center">
+                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                    Save Changes
+                </button>
+                <a href="{% url 'user:change_password' %}" class="text-blue-600 underline">Change Password</a>
+            </div>
+        </form>
     </div>
 </section>
 {% endblock %}

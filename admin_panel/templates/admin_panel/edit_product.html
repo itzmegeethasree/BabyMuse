@@ -1,4 +1,6 @@
 {% extends 'admin_panel/base.html' %}
+{% load custom_filters %}
+
 {% block content %}
 
 <div class="max-w-xl mx-auto p-6 bg-white shadow-md rounded-md mt-10">
@@ -13,44 +15,61 @@
   <form method="post" enctype="multipart/form-data" class="space-y-4">
     {% csrf_token %}
 
-    <input type="text" name="name" value="{{ product.name }}" placeholder="Product Name"
+    <!-- Name -->
+    <label for="name" class="block font-semibold">Product Name</label>
+    <input type="text" id="name" name="name" value="{{ product.name }}" placeholder="Product Name"
       class="w-full px-4 py-2 border rounded" required />
 
-    <select name="category" class="w-full px-4 py-2 border rounded" required>
-      {% for category in categories %}
-      <option value="{{ category.id }}" {% if category.id == product.category.id %}selected{% endif %}>
-        {{ category.name }}
+    <!-- Category -->
+    <label for="category" class="block font-semibold">Category</label>
+    <select name="category" id="category" class="w-full px-4 py-2 border rounded" required>
+      {% for cat in categories %}
+      <option value="{{ cat.id }}" {% if cat.id|equals_id:product.category.id %}selected{% endif %}>
+        {{ cat.name }}
       </option>
       {% endfor %}
     </select>
 
-    <textarea name="description" placeholder="Product Description" class="w-full px-4 py-2 border rounded" rows="4"
-      required>{{ product.description }}</textarea>
 
-    <input type="number" name="price" step="0.01" value="{{ product.price }}" placeholder="Price"
+
+
+    <!-- Description -->
+    <label for="description" class="block font-semibold">Description</label>
+    <textarea name="description" id="description" placeholder="Product Description"
+      class="w-full px-4 py-2 border rounded" rows="4" required>{{ product.description }}</textarea>
+
+    <!-- Price -->
+    <label for="price" class="block font-semibold">Price (₹)</label>
+    <input type="number" id="price" name="price" step="0.01" value="{{ product.price }}" placeholder="Price"
       class="w-full px-4 py-2 border rounded" required />
 
-    <input type="number" name="stock" value="{{ product.stock }}" placeholder="Stock"
+    <!-- Stock -->
+    <label for="stock" class="block font-semibold">Stock</label>
+    <input type="number" id="stock" name="stock" value="{{ product.stock }}" placeholder="Stock"
       class="w-full px-4 py-2 border rounded" required />
 
-    <select name="status" class="w-full px-4 py-2 border rounded" required>
-<option value="Active" {% if product.status == "Active" %}selected{% endif %}>Active</option>
-<option value="Inactive" {% if product.status == "Inactive" %}selected{% endif %}>Inactive</option>
+    <!-- Status -->
+    <label for="status" class="block font-semibold">Status</label>
+    <select name="status" id="status" class="w-full px-4 py-2 border rounded" required>
+      <option value="Active" {% if product.status|equals_id:"Active" %}selected{% endif %}>Active</option>
+      <option value="Inactive" {% if product.status|equals_id:"Inactive" %}selected{% endif %}>Inactive</option>
     </select>
 
-    <!-- Image Preview and Upload -->
-<h4 class="font-semibold">Current Images:</h4>
-<div class="flex gap-4 my-2">
-  {% for img in product.images.all %}
-    <img src="{{ img.image.url }}" class="w-24 h-24 object-cover rounded shadow" />
-  {% empty %}
-    <p class="text-gray-500">No images uploaded.</p>
-  {% endfor %}
-</div>
+    <!-- Current Images -->
+    <h4 class="font-semibold mt-4">Current Images:</h4>
+    <div class="flex gap-4 my-2 flex-wrap">
+      {% for img in product.images.all %}
+      <img src="{{ img.image.url }}" class="w-24 h-24 object-cover rounded shadow" />
+      {% empty %}
+      <p class="text-gray-500">No images uploaded.</p>
+      {% endfor %}
+    </div>
 
-<label class="block font-semibold">Upload New Images (optional):</label>
-<input type="file" name="images" multiple accept="image/*" class="w-full px-4 py-2 border rounded" />
+    <!-- Upload New Images -->
+    <label for="images" class="block font-semibold">Upload New Images (optional)</label>
+    <input type="file" id="images" name="images" multiple accept="image/*" class="w-full px-4 py-2 border rounded" />
 
+    <!-- Submit -->
     <div class="flex justify-end">
       <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">
         Save Changes
@@ -58,5 +77,4 @@
     </div>
   </form>
 </div>
-
 {% endblock %}

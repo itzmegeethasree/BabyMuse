@@ -7,6 +7,9 @@ import random
 class CustomUser(AbstractUser):
     phone = models.CharField(max_length=15, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    profile_image = models.ImageField(
+        upload_to='profile_images/', blank=True, null=True)
+
     email = models.EmailField(unique=True)
 
     def __str__(self):
@@ -24,7 +27,6 @@ class EmailOTP(models.Model):
     def generate_otp(self):
         self.otp = str(random.randint(100000, 999999))
         self.save()
-# user/models.py
 
 
 class Profile(models.Model):

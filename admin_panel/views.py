@@ -19,6 +19,7 @@ import random
 import string
 import csv
 from django.core.exceptions import ObjectDoesNotExist
+from django.views.decorators.http import require_POST
 
 
 User = get_user_model()
@@ -163,9 +164,14 @@ def admin_products(request):
     products = Product.objects.filter(is_deleted=False).select_related(
         'category').order_by('-created_at')
     categories = Category.objects.filter(is_deleted=False)
+    paginator = Paginator(products, 10)  # 10 products per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
     return render(request, 'admin_panel/products.html', {
         'products': products,
         'categories': categories,
+        'page_obj': page_obj
     })
 
 
@@ -246,32 +252,32 @@ def process_image(image_file):
 
 @admin_login_required
 def admin_edit_product(request, product_id):
-    product = get_object_or_404(Product, id=product_id)
-    categories = Category.objects.filter(is_deleted=False)
+    product = get_object_or_404(Product, id=product_id, is_deleted=False)
+
     if request.method == 'POST':
-        product.name = request.POST.get('name')
-        product.description = request.POST.get('description')
-        product.price = request.POST.get('price')
-        product.stock = request.POST.get('stock')
-        product.status = request.POST.get('status')
-        try:
-            category = Category.objects.get(id=request.POST.get('category'))
-            product.category = category
-        except Category.DoesNotExist:
-            messages.error(request, "Invalid category selected.")
-            return render(request, 'admin_panel/edit_product.html', {'product': product, 'categories': categories})
-        product.save()
-        image_files = request.FILES.getlist('images')
-        if image_files:
-            product.images.all().delete()
-            for image_file in image_files[:3]:
-                processed = process_image(image_file)
-                if processed:
-                    ProductImage.objects.create(
-                        product=product, image=processed)
-        messages.success(request, "Product updated successfully.")
-        return redirect('admin_products')
-    return render(request, 'admin_panel/edit_product.html', {'product': product, 'categories': categories})
+        form = ProductForm(request.POST, request.FILES, instance=product)
+        if form.is_valid():
+            form.save()
+            images = request.FILES.getlist('images')
+            if images:
+                for img in images:
+                    processed = process_image(img)
+                    if processed:
+                        ProductImage.objects.create(
+                            product=product, image=processed)
+            messages.success(request, "Product updated successfully.")
+            return redirect('admin_panel:admin_products')
+    else:
+        form = ProductForm(instance=product)
+
+    categories = Category.objects.filter(
+        parent__isnull=True, is_deleted=False).prefetch_related('subcategories')
+
+    return render(request, 'admin_panel/edit_product.html', {
+        'form': form,
+        'product': product,
+        'categories': categories
+    })
 
 
 @admin_login_required
@@ -280,7 +286,7 @@ def admin_delete_product(request, product_id):
     product.is_deleted = True
     product.save()
     messages.success(request, "Product deleted successfully.")
-    return redirect('admin_products')
+    return redirect('admin_panel:admin_products')
 
 # category Management
 
@@ -346,7 +352,7 @@ def admin_customer_list(request):
     paginator = Paginator(customers, 10)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-    return render(request, 'admin_panel/customer_list.html', {'page_obj': page_obj, 'query': query})
+    return render(request, 'admin_panel/customer_list.html', {'page_obj': page_obj, 'query': query, 'customers': customers})
 
 
 @admin_login_required
@@ -358,3 +364,13 @@ def admin_view_customer(request, customer_id):
 def custom_admin_logout(request):
     request.session.flush()
     return redirect('admin_panel:custom_admin_login')
+
+
+@require_POST
+def toggle_user_status(request, user_id):
+    user = get_object_or_404(User, id=user_id)
+    user.is_active = not user.is_active
+    user.save()
+    status = "unblocked" if user.is_active else "blocked"
+    messages.success(request, f"User {user.username} has been {status}.")
+    return redirect('admin_panel:admin_customer_list')

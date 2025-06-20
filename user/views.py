@@ -1,3 +1,4 @@
+from django.contrib.auth import login
 from django.shortcuts import render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth import get_user_model
@@ -9,6 +10,7 @@ from datetime import timedelta
 from .models import EmailOTP
 from django.contrib.auth.decorators import login_required
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.contrib.auth import update_session_auth_hash
 
 
 User = get_user_model()
@@ -92,7 +94,7 @@ def user_register(request):
 
         user = User.objects.create_user(
             username=username, email=email, password=password)
-        user.backend = 'django.contrib.auth.backends.ModelBackend'  # fix added here
+        user.backend = 'django.contrib.auth.backends.ModelBackend'
         login(request, user)
         return redirect('home')
 
@@ -108,12 +110,15 @@ def send_otp(email):
     otp_obj, _ = EmailOTP.objects.get_or_create(email=email)
     otp_obj.generate_otp()
 
-    send_mail(
-        subject='Your OTP for BabyMuse Signup',
-        message=f'Your OTP is {otp_obj.otp}',
-        from_email='your_email@gmail.com',
-        recipient_list=[email],
-    )
+    print(f"🔐 OTP for {email} is: {otp_obj.otp}")  # Visible in terminal
+
+    # Comment out actual sending in development
+    # send_mail(
+    #     subject='Your OTP for BabyMuse Signup',
+    #     message=f'Your OTP is {otp_obj.otp}',
+    #     from_email='your_email@gmail.com',
+    #     recipient_list=[email],
+    # )
 
 
 def otp_signup_request(request):
@@ -127,7 +132,7 @@ def otp_signup_request(request):
 
 def otp_verify(request):
     email = request.session.get('email')
-    otp_record = None  # <-- define it here
+    otp_record = None
 
     if request.method == 'POST':
         entered_otp = request.POST.get('otp')
@@ -141,7 +146,6 @@ def otp_verify(request):
             messages.error(request, 'No OTP sent. Please try again.')
             return redirect('user:otp_signup_request')
 
-    # This block was throwing the error — check only if otp_record exists
     if otp_record and timezone.now() - otp_record.created_at > timedelta(minutes=5):
         messages.error(request, 'OTP expired. Please request again.')
         otp_record.delete()
@@ -182,8 +186,11 @@ def set_password(request):
             return redirect('user:user_login')
 
         user = User.objects.create_user(
-            username=username, email=email, password=password)
+            username=username, email=email, password=password
+        )
+        user.backend = 'django.contrib.auth.backends.ModelBackend'
         login(request, user)
+
         messages.success(request, 'Account created successfully.')
         return redirect('home')
 
@@ -192,4 +199,44 @@ def set_password(request):
 
 @login_required
 def profile_view(request):
-    return render(request, 'user/profile.html', {'user': request.user})
+    user = request.user
+
+    if request.method == 'POST':
+        user.first_name = request.POST.get('first_name', user.first_name)
+        user.last_name = request.POST.get('last_name', user.last_name)
+        user.email = request.POST.get('email', user.email)
+        user.phone = request.POST.get('phone', user.phone)
+
+        if 'profile_image' in request.FILES:
+            user.profile_image = request.FILES['profile_image']
+
+        user.save()
+        messages.success(request, "Profile updated successfully!")
+        return redirect('user:profile')
+
+    return render(request, 'user/profile.html', {'user': user})
+
+
+@login_required
+def change_password(request):
+    if request.method == 'POST':
+        old_password = request.POST.get('old_password')
+        new_password = request.POST.get('new_password')
+        confirm_password = request.POST.get('confirm_password')
+
+        if not request.user.check_password(old_password):
+            messages.error(request, "Old password is incorrect.")
+        elif new_password != confirm_password:
+            messages.error(request, "New passwords do not match.")
+        elif len(new_password) < 6:
+            messages.error(
+                request, "New password must be at least 6 characters long.")
+        else:
+            request.user.set_password(new_password)
+            request.user.save()
+            update_session_auth_hash(
+                request, request.user)  # Keep user logged in
+            messages.success(request, "Password updated successfully.")
+            return redirect('user:profile')
+
+    return render(request, 'user/change_password.html')

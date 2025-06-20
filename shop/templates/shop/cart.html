@@ -29,15 +29,15 @@
           <td class="p-4 font-semibold">{{ item.product.name }}</td>
           <td class="p-4">₹{{ item.product.price }}</td>
           <td class="p-4">
-            <form action="{% url 'update_cart_quantity' item.product.id %}" method="post"
-              class="flex items-center gap-2">
-              {% csrf_token %}
-              <input type="number" name="quantity" value="{{ item.quantity }}" min="1"
-                class="w-16 px-2 py-1 border rounded">
-              <button class="text-blue-600 hover:underline">Update</button>
-            </form>
+            <div class="flex items-center gap-2">
+              <input type="number" class="w-16 px-2 py-1 border rounded quantity-input"
+                data-product-id="{{ item.product.id }}" value="{{ item.quantity }}" min="1">
+              <button class="text-blue-600 hover:underline update-qty-btn" data-product-id="{{ item.product.id }}">
+                Update
+              </button>
+            </div>
           </td>
-          <td class="p-4">
+          <td class="p-4" id="row-total-{{ item.product.id }}">
             ₹{{ item.product.price|floatformat:2 }} × {{ item.quantity }} =
             <strong>₹{{ item.total_price|floatformat:2 }}</strong>
           </td>
@@ -53,7 +53,7 @@
 
   <!-- Total Cart Price -->
   <div class="text-right mt-6 text-xl font-bold text-pink-700">
-    Total Cart Price = ₹{{ total_price|floatformat:2 }}
+    Total Cart Price = <span id="total-cart-price">₹{{ total_price|floatformat:2 }}</span>
   </div>
 
   {% else %}
@@ -68,8 +68,15 @@
 
 <!-- AJAX Script -->
 <script>
+  function showToast(message) {
+    const toast = document.getElementById("toast");
+    toast.innerText = message;
+    toast.classList.remove("hidden");
+    setTimeout(() => toast.classList.add("hidden"), 2000);
+  }
+
   function removeFromCart(productId) {
-    fetch("{% url 'remove_from_cart_ajax' %}", {
+    fetch("{% url 'ajax_remove_from_cart' %}", {
       method: "POST",
       headers: {
         'X-CSRFToken': '{{ csrf_token }}',
@@ -83,18 +90,47 @@
           const row = document.getElementById(`cart-row-${productId}`);
           if (row) row.remove();
 
-          const toast = document.getElementById("toast");
-          if (toast) {
-            toast.innerText = data.message;
-            toast.classList.remove("hidden");
-            setTimeout(() => toast.classList.add("hidden"), 2000);
+          // Update total price
+          if (data.new_total_price !== undefined) {
+            document.getElementById("total-cart-price").innerText = `₹${parseFloat(data.new_total_price).toFixed(2)}`;
           }
 
-          // Reload to update total price
-          location.reload();
+          showToast(data.message);
         }
       });
   }
-</script>
+
+  // Quantity update AJAX
+  document.querySelectorAll(".update-qty-btn").forEach(btn => {
+    btn.addEventListener("click", function () {
+      const productId = this.dataset.productId;
+      const input = document.querySelector(`.quantity-input[data-product-id="${productId}"]`);
+      const quantity = input.value;
+
+      fetch(`/shop/cart/update/${productId}/`, {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": "{{ csrf_token }}",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: `quantity=${quantity}`
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.status === "success") {
+            // Update total for this row
+            document.getElementById(`row-total-${productId}`).innerHTML =
+              `₹${parseFloat(data.unit_price).toFixed(2)} × ${quantity} = <strong>₹${parseFloat(data.item_total).toFixed(2)}</strong>`;
+
+            // Update cart total
+            document.getElementById("total-cart-price").innerText = `₹${parseFloat(data.new_total).toFixed(2)}`;
+
+            showToast(data.message);
+          } else {
+            showToast(data.message || "Failed to update.");
+          }
+        });
+    });
+  });
 </script>
 {% endblock %}

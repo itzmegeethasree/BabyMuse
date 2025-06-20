@@ -1,12 +1,13 @@
 {% extends 'core/base.html' %}
 {% load static %}
+{% load cart_extras %}
 
 {% block content %}
 <div class="bg-gray-50 min-h-screen py-8">
   <div class="container mx-auto px-4">
     <h1 class="text-3xl font-bold mb-6 text-center text-pink-600">Shop BabyMuse Products</h1>
 
-    <!-- Search & Filters -->
+    <!-- 🔍 Search & Filters -->
     <form method="get" class="mb-6 grid md:grid-cols-4 gap-4">
       <input type="text" name="search" placeholder="Search products..." value="{{ search_query }}"
         class="p-2 border border-gray-300 rounded-md col-span-1" />
@@ -14,11 +15,8 @@
       <select name="category" class="p-2 border border-gray-300 rounded-md col-span-1">
         <option value="">All Categories</option>
         {% for cat in categories %}
-        {% if cat.id|stringformat:"s" == selected_category %}
-        <option value="{{ cat.id }}" selected>{{ cat.name }}</option>
-        {% else %}
-        <option value="{{ cat.id }}">{{ cat.name }}</option>
-        {% endif %}
+        <option value="{{ cat.id }}" {% if cat.id|equals:selected_category %} selected{% endif %}>{{ cat.name
+          }}</option>
         {% endfor %}
       </select>
 
@@ -29,32 +27,12 @@
           class="w-1/2 p-2 border border-gray-300 rounded-md" />
       </div>
 
-      <select name="sort" class="p-2 border border-gray-300 rounded-md col-span-1">
+      <select name="sort" class="...">
         <option value="">Sort By</option>
-
-        {% if sort_by == "price_low" %}
-        <option value="price_low" selected>Price: Low to High</option>
-        {% else %}
-        <option value="price_low">Price: Low to High</option>
-        {% endif %}
-
-        {% if sort_by == "price_high" %}
-        <option value="price_high" selected>Price: High to Low</option>
-        {% else %}
-        <option value="price_high">Price: High to Low</option>
-        {% endif %}
-
-        {% if sort_by == "name_asc" %}
-        <option value="name_asc" selected>A – Z</option>
-        {% else %}
-        <option value="name_asc">A – Z</option>
-        {% endif %}
-
-        {% if sort_by == "name_desc" %}
-        <option value="name_desc" selected>Z – A</option>
-        {% else %}
-        <option value="name_desc">Z – A</option>
-        {% endif %}
+        <option value="price_low" {% if sort_by|equals:"price_low" %}selected{% endif %}>Price: Low to High</option>
+        <option value="price_high" {% if sort_by|equals:"price_high" %}selected{% endif %}>Price: High to Low</option>
+        <option value="name_asc" {% if sort_by|equals:"name_asc" %}selected{% endif %}>A – Z</option>
+        <option value="name_desc" {% if sort_by|equals:"name_desc" %}selected{% endif %}>Z – A</option>
       </select>
 
       <div class="col-span-4 flex justify-end space-x-2">
@@ -65,40 +43,41 @@
       </div>
     </form>
 
-    <!-- Products Grid -->
+    <!-- 🛍️ Products Grid -->
     {% if page_obj %}
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
       {% for product in page_obj %}
-      <div class="bg-white shadow rounded-lg overflow-hidden">
+      <div class="relative bg-white shadow rounded-lg overflow-hidden">
         <a href="{% url 'product_detail' product.id %}">
-          {% if product.images.all %}<img src="{{ product.images.all.0.image.url }}" alt="{{ product.name }}"
-            class="w-full h-60 object-cover object-center rounded-md">
-
+          {% if product.images.all %}
+          <img src="{{ product.images.all.0.image.url }}" alt="{{ product.name }}"
+            class="w-full h-60 object-cover object-center rounded-md transition-transform duration-300 hover:scale-105">
           {% else %}
           <img src="{% static 'images/default.jpg' %}" alt="No image"
             class="w-full h-60 object-cover object-center rounded-md">
-
           {% endif %}
-          <div class="p-4">
-            <h2 class="text-lg font-semibold text-gray-800">{{ product.name }}</h2>
-            <p class="text-pink-600 font-bold mt-2">₹{{ product.price }}</p>
-            <p class="text-gray-500 text-sm mt-1 truncate">{{ product.description }}</p>
-            <div class="flex gap-2 mt-2">
-              <a href="{% url 'add_to_wishlist' product.id %}"
-                class="bg-pink-100 text-pink-600 px-3 py-1 rounded hover:bg-pink-200">
-                ❤️ Wishlist
-              </a>
-              <button class="add-to-cart-btn bg-green-600 text-white px-3 py-1 rounded"
-                data-product-id="{{ product.id }}">
-                🛒 Add to Cart
-              </button>
-            </div>
 
-            {% if product.stock == 0 %}
-            <span class="text-red-500 font-medium text-sm">Out of Stock</span>
-            {% endif %}
-          </div>
+          {% if product.stock == 0 %}
+          <span class="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded">Out of Stock</span>
+          {% endif %}
         </a>
+
+        <div class="p-4">
+          <h2 class="text-lg font-semibold text-gray-800">{{ product.name }}</h2>
+          <p class="text-pink-600 font-bold mt-2">₹{{ product.price }}</p>
+          <p class="text-gray-500 text-sm mt-1 truncate">{{ product.description }}</p>
+          <div class="flex gap-2 mt-2">
+            <button class="wishlist-btn bg-pink-100 text-pink-600 px-3 py-1 rounded hover:bg-pink-200"
+              data-product-id="{{ product.id }}">
+              ❤️ Wishlist
+            </button>
+
+            <button class="add-to-cart-btn bg-green-600 text-white px-3 py-1 rounded"
+              data-product-id="{{ product.id }}">
+              🛒 Add to Cart
+            </button>
+          </div>
+        </div>
       </div>
       {% endfor %}
     </div>
@@ -106,15 +85,15 @@
     <div class="text-center text-gray-600 mt-10">No products found matching your criteria.</div>
     {% endif %}
 
-    <!-- Pagination -->
+    <!-- 📄 Pagination -->
     <div class="mt-10 flex justify-center space-x-2">
       {% if page_obj.has_previous %}
       <a href="?{% if request.GET %}{{ request.GET.urlencode|cut:'page=' }}&{% endif %}page={{ page_obj.previous_page_number }}"
         class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">&laquo; Prev</a>
       {% endif %}
 
-      <span class="px-4 py-2 bg-pink-600 text-white rounded">{{ page_obj.number }} of
-        {{page_obj.page_number}}</span>
+      <span class="px-4 py-2 bg-pink-600 text-white rounded">{{ page_obj.number }} of {{ page_obj.paginator.num_pages
+        }}</span>
 
       {% if page_obj.has_next %}
       <a href="?{% if request.GET %}{{ request.GET.urlencode|cut:'page=' }}&{% endif %}page={{ page_obj.next_page_number }}"
@@ -124,18 +103,20 @@
   </div>
 </div>
 
+<!-- ✅ AJAX Scripts -->
 <script>
   document.addEventListener("DOMContentLoaded", function () {
-    const cartButtons = document.querySelectorAll(".add-to-cart-btn");
+    const csrfToken = "{{ csrf_token }}";
 
-    cartButtons.forEach(btn => {
+    // 🛒 Add to Cart
+    document.querySelectorAll(".add-to-cart-btn").forEach(btn => {
       btn.addEventListener("click", function () {
         const productId = this.dataset.productId;
 
         fetch("{% url 'ajax_add_to_cart' %}", {
           method: "POST",
           headers: {
-            "X-CSRFToken": "{{ csrf_token }}",
+            "X-CSRFToken": csrfToken,
             "Content-Type": "application/x-www-form-urlencoded"
           },
           body: `product_id=${productId}`
@@ -153,6 +134,32 @@
       });
     });
 
+    // ❤️ Wishlist
+    document.querySelectorAll(".wishlist-btn").forEach(btn => {
+      btn.addEventListener("click", function () {
+        const productId = this.dataset.productId;
+
+        fetch("{% url 'ajax_add_to_wishlist' %}", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": csrfToken,
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: `product_id=${productId}`
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.status === "added") {
+              showToast("Added to wishlist!");
+            } else {
+              showToast("Already in wishlist.");
+            }
+          })
+          .catch(() => showToast("Error adding to wishlist"));
+      });
+    });
+
+    // ✅ Toast Function
     function showToast(message) {
       const toast = document.createElement("div");
       toast.innerText = message;

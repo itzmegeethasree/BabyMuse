@@ -24,7 +24,7 @@
       <option value="">-- Sub Category (optional) --</option>
       {% for cat in categories %}
       {% if cat.id != form.instance.id %}
-      <option value="{{ cat.id }}" {% if form.instance.parent and form.instance.parent.id|equals_str:cat.id %} selected
+      <option value="{{ cat.id }}" {% if form.instance.parent and form.instance.parent.id|equals_id:cat.id %} selected
         {% endif %}>
         {{ cat.name }}
       </option>

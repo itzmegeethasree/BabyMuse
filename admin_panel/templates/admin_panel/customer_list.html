@@ -1,6 +1,6 @@
 {% extends 'admin_panel/base.html' %}
 {% block content %}
-
+{{Customers}}
 <div class="p-6">
   <h2 class="text-2xl font-bold mb-4">Customers</h2>
 
@@ -10,34 +10,41 @@
     <button type="submit" class="bg-blue-600 text-white px-4 py-1 rounded">Search</button>
   </form>
 
-  <table class="w-full border text-sm">
-    <thead class="bg-gray-100">
+  <table class="min-w-full bg-white border">
+    <thead>
       <tr>
-        <th class="p-2 border">#</th>
-        <th class="p-2 border">Name</th>
-        <th class="p-2 border">Email</th>
-        <th class="p-2 border">Phone</th>
-        <th class="p-2 border">Status</th>
-        <th class="p-2 border">Actions</th>
+        <th class="px-4 py-2 border">Username</th>
+        <th class="px-4 py-2 border">Email</th>
+        <th class="px-4 py-2 border">Status</th>
+        <th class="px-4 py-2 border">Action</th>
       </tr>
     </thead>
     <tbody>
-      {% for customer in page_obj %}
+      {% for user in page_obj %}
       <tr>
-        <td class="p-2 border">{{ forloop.counter }}</td>
-        <td class="p-2 border">{{ customer.name }}</td>
-        <td class="p-2 border">{{ customer.email }}</td>
-        <td class="p-2 border">{{ customer.phone }}</td>
-        <td class="p-2 border">
-          {% if customer.is_active %}
-          <span class="text-green-600">Active</span>
+        <td class="border px-4 py-2">{{ user.username }}</td>
+        <td class="border px-4 py-2">{{ user.email }}</td>
+        <td class="border px-4 py-2">
+          {% if user.is_active %}
+          <span class="text-green-600 font-semibold">Active</span>
           {% else %}
-          <span class="text-red-600">Inactive</span>
+          <span class="text-red-600 font-semibold">Blocked</span>
           {% endif %}
         </td>
-        <td class="p-2 border">
-          <a href="{% url 'admin_panel:admin_view_customer' customer.id %}"
-            class="text-blue-600 hover:underline">View</a>
+        <td class="border px-4 py-2">
+          <form action="{% url 'admin_panel:toggle_user_status' user.id %}" method="post"
+            onsubmit="return confirm('Are you sure you want to {% if user.is_active %}block{% else %}unblock{% endif %} this user?');">
+            {% csrf_token %}
+            {% if user.is_active %}
+            <button type="submit" class="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700">
+              Block
+            </button>
+            {% else %}
+            <button type="submit" class="bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">
+              Unblock
+            </button>
+            {% endif %}
+          </form>
         </td>
       </tr>
       {% endfor %}

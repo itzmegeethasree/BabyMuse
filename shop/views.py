@@ -1,65 +1,31 @@
-
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.core.paginator import Paginator
-from .models import Product, Category
-from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
-from .models import Wishlist, CartItem, Product
 from django.http import JsonResponse
 from django.views.decorators.http import require_POST
-from django.views.decorators.http import require_POST
-from django.http import JsonResponse
 import json
+from django.db.models import Avg
 
-
-def product_list(request):
-    categories = Category.objects.all()
-
-    # Get selected category from query params
-    selected_category_id = request.GET.get('category')
-
-    # Filter products
-    if selected_category_id:
-        products = Product.objects.filter(category__id=selected_category_id)
-    else:
-        products = Product.objects.all()
-
-    # Set up pagination
-    paginator = Paginator(products, 9)  # Show 9 products per page
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    return render(request, 'shop/shop.html', {
-        'categories': categories,
-        'products': page_obj,  # products will be paginated
-    })
+from .models import Product, Category, Wishlist, CartItem, Review
 
 
 def shop_view(request):
-    print("shop view")
     products = Product.objects.filter(status='Active')
 
-    # --- Filters ---
     search_query = request.GET.get('search', '')
     category_id = request.GET.get('category', '')
     price_min = request.GET.get('price_min', '')
     price_max = request.GET.get('price_max', '')
     sort_by = request.GET.get('sort', '')
 
-    # Search
     if search_query:
         products = products.filter(name__icontains=search_query)
-
-    # Filter by category
     if category_id:
         products = products.filter(category__id=category_id)
-
-    # Filter by price
     if price_min.isdigit() and price_max.isdigit():
         products = products.filter(price__gte=price_min, price__lte=price_max)
 
-    # Sorting
     if sort_by == "price_low":
         products = products.order_by('price')
     elif sort_by == "price_high":
@@ -68,8 +34,9 @@ def shop_view(request):
         products = products.order_by('name')
     elif sort_by == "name_desc":
         products = products.order_by('-name')
+    else:
+        products = products.order_by('-created_at')
 
-    # Pagination
     paginator = Paginator(products, 9)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
@@ -88,9 +55,31 @@ def shop_view(request):
 
 
 def product_detail(request, pk):
-    product = get_object_or_404(Product, pk=pk)
-    images = product.images.all()
-    return render(request, 'shop/product_detail.html', {'product': product, 'images': images})
+    try:
+        product = Product.objects.prefetch_related('images').get(pk=pk)
+
+        if product.status != 'Active':
+            messages.error(request, "This product is currently unavailable.")
+            return redirect('shop')
+
+        reviews = Review.objects.filter(
+            product=product).order_by('-created_at')
+
+        avg_rating = reviews.aggregate(avg=Avg('rating'))['avg']
+        total_reviews = reviews.count()
+
+        context = {
+            'product': product,
+            'images': product.images.all(),  # 👈 needed for thumbnails
+            'reviews': reviews,
+            'avg_rating': round(avg_rating, 1) if avg_rating is not None else 0,
+            'review_count': total_reviews,  # 👈 renamed for template clarity
+        }
+        return render(request, 'shop/product_detail.html', context)
+
+    except Product.DoesNotExist:
+        messages.error(request, "Product not found or has been removed.")
+        return redirect('shop')
 
 
 @login_required
@@ -104,21 +93,23 @@ def wishlist_view(request):
 
 
 @login_required
-def add_to_wishlist(request, product_id):
+@require_POST
+def ajax_add_to_wishlist(request):
+    product_id = request.POST.get('product_id')
     product = get_object_or_404(Product, id=product_id)
-    Wishlist.objects.get_or_create(user=request.user, product=product)
-    messages.success(request, "Added to wishlist.")
-    return redirect(request.META.get('HTTP_REFERER', 'home'))
+    wishlist_item, created = Wishlist.objects.get_or_create(
+        user=request.user, product=product)
+    return JsonResponse({'status': 'added' if created else 'exists'})
 
 
 @login_required
-def remove_from_wishlist(request, product_id):
+@require_POST
+def ajax_remove_from_wishlist(request):
+    data = json.loads(request.body)
+    product_id = data.get("product_id")
     Wishlist.objects.filter(user=request.user, product_id=product_id).delete()
-    messages.success(request, "Removed from wishlist.")
-    return redirect('wishlist')
+    return JsonResponse({"status": "success", "message": "Removed from wishlist"})
 
-
-# Cart Views
 
 @login_required
 def cart_view(request):
@@ -138,52 +129,7 @@ def cart_view(request):
 
 
 @login_required
-def add_to_cart(request, product_id):
-    product = get_object_or_404(Product, id=product_id)
-
-    cart_item, created = CartItem.objects.get_or_create(
-        user=request.user, product=product)
-
-    if not created:
-        cart_item.quantity += 1
-        cart_item.save()
-    messages.success(request, "Added to Cart.")
-
-    return redirect(request.META.get('HTTP_REFERER', 'home'))
-
-
-@login_required
-def remove_from_cart(request, product_id):
-    CartItem.objects.filter(user=request.user, product_id=product_id).delete()
-    messages.success(request, "Removed from cart.")
-    return redirect('cart')
-
-
-@login_required
-def update_cart_quantity(request, product_id):
-    if request.method == 'POST':
-        try:
-            quantity = int(request.POST.get('quantity', 1))
-            if quantity < 1:
-                messages.error(request, "Quantity must be at least 1.")
-                return redirect('cart')
-
-            cart_item = CartItem.objects.get(
-                user=request.user, product_id=product_id)
-            cart_item.quantity = quantity
-            cart_item.save()
-            messages.success(
-                request, f"Quantity updated for {cart_item.product.name}.")
-        except CartItem.DoesNotExist:
-            messages.error(request, "Item not found in your cart.")
-        except ValueError:
-            messages.error(request, "Invalid quantity entered.")
-
-    return redirect('cart')
-
-
 @require_POST
-@login_required
 def ajax_add_to_cart(request):
     product_id = request.POST.get('product_id')
     try:
@@ -195,31 +141,70 @@ def ajax_add_to_cart(request):
             cart_item.save()
 
         cart_count = CartItem.objects.filter(user=request.user).count()
-
         return JsonResponse({'status': 'success', 'cart_count': cart_count})
     except Product.DoesNotExist:
         return JsonResponse({'status': 'error', 'message': 'Product not found'})
 
 
-# @login_required
-def ajax_add_to_wishlist(request):
-    if request.method == "POST":
-        product_id = request.POST.get('product_id')
-        product = get_object_or_404(Product, id=product_id)
-        wishlist_item, created = Wishlist.objects.get_or_create(
-            user=request.user, product=product)
-        return JsonResponse({'status': 'added' if created else 'exists'})
-
-
-@require_POST
 @login_required
-def remove_from_cart_ajax(request):
+@require_POST
+def ajax_remove_from_cart(request):
     data = json.loads(request.body)
     product_id = data.get("product_id")
-
     try:
         item = CartItem.objects.get(user=request.user, product_id=product_id)
         item.delete()
         return JsonResponse({"status": "success", "message": "Item removed from cart"})
     except CartItem.DoesNotExist:
         return JsonResponse({"status": "error", "message": "Item not found"})
+
+
+@require_POST
+@login_required
+def ajax_update_cart_quantity(request, product_id):
+    try:
+        quantity = int(request.POST.get('quantity', 1))
+        if quantity < 1:
+            return JsonResponse({"status": "error", "message": "Quantity must be at least 1."})
+
+        cart_item = CartItem.objects.get(
+            user=request.user, product_id=product_id)
+        cart_item.quantity = quantity
+        cart_item.save()
+
+        total_price = sum(
+            item.quantity * item.product.price for item in CartItem.objects.filter(user=request.user)
+        )
+
+        return JsonResponse({
+            "status": "success",
+            "message": f"Quantity updated for {cart_item.product.name}.",
+            "item_total": cart_item.quantity * cart_item.product.price,
+            "unit_price": cart_item.product.price,
+            "new_total": total_price
+        })
+    except CartItem.DoesNotExist:
+        return JsonResponse({"status": "error", "message": "Item not found in your cart."})
+    except ValueError:
+        return JsonResponse({"status": "error", "message": "Invalid quantity."})
+
+
+@login_required
+def ajax_cart_data(request):
+    cart_items = CartItem.objects.filter(
+        user=request.user).select_related('product')
+    data = []
+    total_price = 0
+
+    for item in cart_items:
+        price = item.quantity * item.product.price
+        total_price += price
+        data.append({
+            'id': item.product.id,
+            'name': item.product.name,
+            'price': item.product.price,
+            'quantity': item.quantity,
+            'total': price,
+        })
+
+    return JsonResponse({"status": "success", "items": data, "total_price": total_price})

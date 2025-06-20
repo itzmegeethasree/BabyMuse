@@ -8,21 +8,16 @@
 
         <!-- Show messages -->
         {% if messages %}
-            <ul class="mb-4">
-                {% for message in messages %}
-                    <li class="text-red-600 text-sm text-center">{{ message }}</li>
-                {% endfor %}
-            </ul>
+        <ul class="mb-4">
+            {% for message in messages %}
+            <li class="text-red-600 text-sm text-center">{{ message }}</li>
+            {% endfor %}
+        </ul>
         {% endif %}
 
         <form method="POST" action="{% url 'user:signup_request' %}">
             {% csrf_token %}
 
-            <div class="mb-4">
-                <label for="name" class="block text-sm font-medium text-gray-700">Full Name</label>
-                <input type="text" name="username" id="name" class="mt-1 block w-full border border-gray-300 rounded-xl p-2"
-                    required>
-            </div>
 
             <div class="mb-4">
                 <label for="email" class="block text-sm font-medium text-gray-700">Email</label>
@@ -30,30 +25,10 @@
                     class="mt-1 block w-full border border-gray-300 rounded-xl p-2" required>
             </div>
 
-            <div class="relative mb-4">
-                <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-                <input id="password" name="password" type="password" required
-                    class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-pink-500 focus:border-pink-500 sm:text-sm">
-
-                <button type="button" onclick="togglePassword('password', this)"
-                    class="absolute inset-y-0 right-3 flex items-center text-sm text-gray-600 hover:text-pink-600">
-                    👁
-                </button>
-            </div>
-
-            <div class="relative mb-6">
-                <label for="confirm_password" class="block text-sm font-medium text-gray-700">Confirm Password</label>
-                <input id="confirm_password" name="confirm_password" type="password" required
-                    class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-pink-500 focus:border-pink-500 sm:text-sm">
-
-                <button type="button" onclick="togglePassword('confirm_password', this)"
-                    class="absolute inset-y-0 right-3 flex items-center text-sm text-gray-600 hover:text-pink-600">
-                    👁
-                </button>
-            </div>
 
             <button type="submit"
-                class="w-full bg-green-600 text-white py-2 rounded-xl font-semibold hover:bg-green-700 transition">Send OTP</button>
+                class="w-full bg-green-600 text-white py-2 rounded-xl font-semibold hover:bg-green-700 transition">Send
+                OTP</button>
         </form>
 
         <div class="mt-6 text-center">
