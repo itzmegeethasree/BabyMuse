@@ -1,13 +1,19 @@
 from django import forms
 from shop.models import Product
-from .widgets import MultiFileInput  # import the custom widget
+from .widgets import MultiFileInput
+
 
 class ProductForm(forms.ModelForm):
-    images = forms.FileField(widget=MultiFileInput(), required=True)
+    images = forms.FileField(
+        widget=MultiFileInput(attrs={'multiple': True}),
+        required=True,
+        label="Product Images"
+    )
 
     class Meta:
         model = Product
-        fields = ['name', 'category', 'description', 'price', 'stock', 'status']
+        fields = ['name', 'category', 'description',
+                  'price', 'stock', 'status']
 
     def clean_images(self):
         images = self.files.getlist('images')

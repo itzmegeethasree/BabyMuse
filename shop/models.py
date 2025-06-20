@@ -1,3 +1,5 @@
+from PIL.Image import Resampling  # Import the Resampling enum
+from django.utils.text import slugify
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
@@ -22,13 +24,32 @@ ORDER_STATUS = [
 
 
 class Category(models.Model):
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=255, unique=True)
     description = models.TextField(blank=True, null=True)
+    slug = models.SlugField(max_length=255, unique=True, null=True, blank=True)
+    parent = models.ForeignKey(
+        'self',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='subcategories'
+    )
+    is_active = models.BooleanField(default=True)
     is_deleted = models.BooleanField(default=False)
-
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        verbose_name_plural = "Categories"
+        ordering = ['-created_at']
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
     def __str__(self):
+        if self.parent:
+            return f"{self.parent} → {self.name}"
         return self.name
 
 
@@ -59,24 +80,24 @@ class ProductImage(models.Model):
     image = models.ImageField(upload_to='products/')
 
     def save(self, *args, **kwargs):
-        # Save original first
+        # Save original first to get file path
         super().save(*args, **kwargs)
 
         # Open the uploaded image
         img_path = self.image.path
         img = Image.open(img_path)
 
-        # Define desired size and crop center
+        # Crop and resize
         desired_size = (600, 600)
         img = self.crop_center(img)
-        img = img.resize(desired_size, Image.ANTIALIAS)
+        img = img.resize(desired_size, Resampling.LANCZOS)  # FIXED here
 
         # Save it back to the same file
         img.save(img_path)
 
     def crop_center(self, img):
         width, height = img.size
-        new_edge = min(width, height)  # Crop to square
+        new_edge = min(width, height)
         left = (width - new_edge) // 2
         top = (height - new_edge) // 2
         right = (width + new_edge) // 2

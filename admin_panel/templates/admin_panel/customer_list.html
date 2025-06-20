@@ -5,8 +5,8 @@
   <h2 class="text-2xl font-bold mb-4">Customers</h2>
 
   <form method="get" class="mb-4 flex items-center">
-    <input type="text" name="q" placeholder="Search by name, email or phone"
-           value="{{ query }}" class="border px-3 py-1 rounded w-1/2 mr-2" />
+    <input type="text" name="q" placeholder="Search by name, email or phone" value="{{ query }}"
+      class="border px-3 py-1 rounded w-1/2 mr-2" />
     <button type="submit" class="bg-blue-600 text-white px-4 py-1 rounded">Search</button>
   </form>
 
@@ -30,13 +30,14 @@
         <td class="p-2 border">{{ customer.phone }}</td>
         <td class="p-2 border">
           {% if customer.is_active %}
-            <span class="text-green-600">Active</span>
+          <span class="text-green-600">Active</span>
           {% else %}
-            <span class="text-red-600">Inactive</span>
+          <span class="text-red-600">Inactive</span>
           {% endif %}
         </td>
         <td class="p-2 border">
-          <a href="{% url 'admin_view_customer' customer.id %}" class="text-blue-600 hover:underline">View</a>
+          <a href="{% url 'admin_panel:admin_view_customer' customer.id %}"
+            class="text-blue-600 hover:underline">View</a>
         </td>
       </tr>
       {% endfor %}
@@ -47,11 +48,12 @@
     <nav class="flex justify-center">
       <ul class="flex space-x-2">
         {% if page_obj.has_previous %}
-          <li><a href="?page={{ page_obj.previous_page_number }}&q={{ query }}" class="px-3 py-1 border rounded">Previous</a></li>
+        <li><a href="?page={{ page_obj.previous_page_number }}&q={{ query }}"
+            class="px-3 py-1 border rounded">Previous</a></li>
         {% endif %}
         <li><span class="px-3 py-1 border rounded bg-gray-300">{{ page_obj.number }}</span></li>
         {% if page_obj.has_next %}
-          <li><a href="?page={{ page_obj.next_page_number }}&q={{ query }}" class="px-3 py-1 border rounded">Next</a></li>
+        <li><a href="?page={{ page_obj.next_page_number }}&q={{ query }}" class="px-3 py-1 border rounded">Next</a></li>
         {% endif %}
       </ul>
     </nav>
