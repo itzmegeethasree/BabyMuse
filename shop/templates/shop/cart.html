@@ -51,9 +51,16 @@
     </table>
   </div>
 
-  <!-- Total Cart Price -->
-  <div class="text-right mt-6 text-xl font-bold text-pink-700">
-    Total Cart Price = <span id="total-cart-price">₹{{ total_price|floatformat:2 }}</span>
+  <!-- Total Cart Price + Checkout Button -->
+  <div class="mt-6 text-right space-y-4">
+    <div class="text-xl font-bold text-pink-700">
+      Total Cart Price = <span id="total-cart-price">₹{{ total_price|floatformat:2 }}</span>
+    </div>
+
+    <a href="{% url 'orders:checkout' %}"
+      class="inline-block bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700">
+      ✅ Proceed to Checkout
+    </a>
   </div>
 
   {% else %}
@@ -90,7 +97,6 @@
           const row = document.getElementById(`cart-row-${productId}`);
           if (row) row.remove();
 
-          // Update total price
           if (data.new_total_price !== undefined) {
             document.getElementById("total-cart-price").innerText = `₹${parseFloat(data.new_total_price).toFixed(2)}`;
           }
@@ -100,7 +106,6 @@
       });
   }
 
-  // Quantity update AJAX
   document.querySelectorAll(".update-qty-btn").forEach(btn => {
     btn.addEventListener("click", function () {
       const productId = this.dataset.productId;
@@ -118,13 +123,10 @@
         .then(res => res.json())
         .then(data => {
           if (data.status === "success") {
-            // Update total for this row
             document.getElementById(`row-total-${productId}`).innerHTML =
               `₹${parseFloat(data.unit_price).toFixed(2)} × ${quantity} = <strong>₹${parseFloat(data.item_total).toFixed(2)}</strong>`;
 
-            // Update cart total
             document.getElementById("total-cart-price").innerText = `₹${parseFloat(data.new_total).toFixed(2)}`;
-
             showToast(data.message);
           } else {
             showToast(data.message || "Failed to update.");

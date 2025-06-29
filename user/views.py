@@ -4,22 +4,23 @@ from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth import get_user_model
 from django.contrib import messages
 import re
+import random
 from django.core.mail import send_mail
 from django.utils import timezone
 from datetime import timedelta
-from .models import EmailOTP
+from .models import EmailOTP, Profile, Address
 from django.contrib.auth.decorators import login_required
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.contrib.auth import update_session_auth_hash
+from django.views.decorators.http import require_POST
 
 
 User = get_user_model()
 
 
 def user_login(request):
-    next_url = request.GET.get('next', '')  # from ?next=/cart/ etc.
+    next_url = request.GET.get('next', '')
 
-    # Show toast before login form if redirected
     if next_url:
         if 'wishlist' in next_url:
             messages.warning(
@@ -39,7 +40,6 @@ def user_login(request):
         if auth_user:
             login(request, auth_user)
 
-            # Safe redirect (prevents open redirect attacks)
             if next_url and url_has_allowed_host_and_scheme(next_url, allowed_hosts={request.get_host()}):
                 return redirect(next_url)
             else:
@@ -96,7 +96,7 @@ def user_register(request):
             username=username, email=email, password=password)
         user.backend = 'django.contrib.auth.backends.ModelBackend'
         login(request, user)
-        return redirect('home')
+        return redirect('user_login')
 
     return render(request, 'user/register.html')
 
@@ -110,9 +110,8 @@ def send_otp(email):
     otp_obj, _ = EmailOTP.objects.get_or_create(email=email)
     otp_obj.generate_otp()
 
-    print(f"🔐 OTP for {email} is: {otp_obj.otp}")  # Visible in terminal
+    print(f"🔐 OTP for {email} is: {otp_obj.otp}")
 
-    # Comment out actual sending in development
     # send_mail(
     #     subject='Your OTP for BabyMuse Signup',
     #     message=f'Your OTP is {otp_obj.otp}',
@@ -200,21 +199,13 @@ def set_password(request):
 @login_required
 def profile_view(request):
     user = request.user
-
-    if request.method == 'POST':
-        user.first_name = request.POST.get('first_name', user.first_name)
-        user.last_name = request.POST.get('last_name', user.last_name)
-        user.email = request.POST.get('email', user.email)
-        user.phone = request.POST.get('phone', user.phone)
-
-        if 'profile_image' in request.FILES:
-            user.profile_image = request.FILES['profile_image']
-
-        user.save()
-        messages.success(request, "Profile updated successfully!")
-        return redirect('user:profile')
-
-    return render(request, 'user/profile.html', {'user': user})
+    profile, _ = Profile.objects.get_or_create(user=user)
+    addresses = Address.objects.filter(user=user)
+    return render(request, 'user/profile.html', {
+        'user': user,
+        'profile': profile,
+        'addresses': addresses,
+    })
 
 
 @login_required
@@ -235,8 +226,151 @@ def change_password(request):
             request.user.set_password(new_password)
             request.user.save()
             update_session_auth_hash(
-                request, request.user)  # Keep user logged in
+                request, request.user)
             messages.success(request, "Password updated successfully.")
             return redirect('user:profile')
 
     return render(request, 'user/change_password.html')
+
+
+@login_required
+def edit_profile(request):
+    user = request.user
+    profile, _ = Profile.objects.get_or_create(user=user)
+
+    if request.method == 'POST':
+        # User model fields
+        first_name = request.POST.get('first_name')
+        last_name = request.POST.get('last_name')
+        new_email = request.POST.get('email')
+        phone = request.POST.get('phone')
+        profile_image = request.FILES.get('profile_image')
+
+        # Profile model fields
+        baby_name = request.POST.get('baby_name')
+        baby_dob = request.POST.get('baby_dob')
+        baby_gender = request.POST.get('baby_gender')
+
+        # Update user fields (except email for now)
+        user.first_name = first_name
+        user.last_name = last_name
+        user.phone = phone
+        if profile_image:
+            user.profile_image = profile_image
+
+        # Update profile fields
+        profile.baby_name = baby_name
+        profile.baby_gender = baby_gender
+        profile.baby_dob = baby_dob if baby_dob else None
+
+        if new_email and new_email != user.email:
+            otp = str(random.randint(100000, 999999))
+            request.session['pending_email'] = new_email
+            request.session['email_otp'] = otp
+            # Simulate send
+            print(f"📧 Email change OTP for {new_email} is: {otp}")
+
+            # send_mail(
+            #     subject='Verify Your New Email - BabyMuse',
+            #     message=f'Your OTP for verifying the new email is: {otp}',
+            #     from_email='noreply@babymuse.com',
+            #     recipient_list=[new_email],
+            #     fail_silently=False,
+            # )
+
+            messages.info(
+                request, f'OTP sent to {new_email}. Please verify to update your email.')
+            return redirect('user:verify_email_otp')
+
+        user.save()
+        profile.save()
+        messages.success(request, "Profile updated successfully.")
+        return redirect('user:profile')
+
+    return render(request, 'user/edit_profile.html', {
+        'user': user,
+        'profile': profile
+    })
+
+
+@login_required
+def verify_email_otp(request):
+    if request.method == 'POST':
+        input_otp = request.POST.get('otp')
+        session_otp = request.session.get('email_otp')
+        new_email = request.session.get('pending_email')
+
+        if input_otp == session_otp and new_email:
+            request.user.email = new_email
+            request.user.save()
+
+            # Clean up session
+            request.session.pop('email_otp', None)
+            request.session.pop('pending_email', None)
+
+            messages.success(request, "✅ Email updated successfully.")
+            return redirect('user:profile')
+        else:
+            messages.error(request, "❌ Invalid OTP. Please try again.")
+
+    return render(request, 'user/verify_email_otp.html')
+
+
+@login_required
+def address_book(request):
+    addresses = Address.objects.filter(user=request.user)
+    return render(request, 'user/address_book.html', {'addresses': addresses})
+
+
+@login_required
+def add_address(request):
+    if request.method == 'POST':
+        Address.objects.create(
+            user=request.user,
+            name=request.POST.get('name'),
+            phone=request.POST.get('phone'),
+            address_line1=request.POST.get('address_line1'),
+            address_line2=request.POST.get('address_line2'),
+            city=request.POST.get('city'),
+            state=request.POST.get('state'),
+            postal_code=request.POST.get('postal_code'),
+            is_default='is_default' in request.POST
+        )
+        messages.success(request, "Address added successfully!")
+        return redirect('user:address_book')
+    return render(request, 'user/add_address.html', {
+        'title': '➕ Add Address',
+        'address': {}
+    })
+
+
+@login_required
+def edit_address(request, id):
+    address = Address.objects.get(id=id, user=request.user)
+
+    if request.method == 'POST':
+        address.name = request.POST.get('name')
+        address.phone = request.POST.get('phone')
+        address.address_line1 = request.POST.get('address_line1')
+        address.address_line2 = request.POST.get('address_line2')
+        address.city = request.POST.get('city')
+        address.state = request.POST.get('state')
+        address.postal_code = request.POST.get('postal_code')
+        address.is_default = 'is_default' in request.POST
+        address.save()
+
+        messages.success(request, "Address updated successfully!")
+        return redirect('user:address_book')
+
+    return render(request, 'user/add_address.html', {
+        'title': '✏️ Edit Address',
+        'address': address
+    })
+
+
+@login_required
+@require_POST
+def delete_address(request, id):
+    Address.objects.filter(id=id, user=request.user).delete()
+    messages.success(request, "Address deleted.")
+    return redirect('user:address_book')

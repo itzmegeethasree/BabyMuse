@@ -1,0 +1,12 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<section class="max-w-xl mx-auto p-6">
+    <h2 class="text-2xl font-semibold mb-4">🔁 Return Order #{{ order.id }}</h2>
+    <form method="POST">
+        {% csrf_token %}
+        <label for="reason" class="block mb-2 font-medium">Reason for Return (required):</label>
+        <textarea name="reason" required class="w-full p-2 border rounded h-32"></textarea>
+        <button type="submit" class="bg-red-600 text-white px-4 py-2 mt-4 rounded">Submit Return Request</button>
+    </form>
+</section>
+{% endblock %}

@@ -1,60 +1,72 @@
 {% extends 'core/base.html' %}
+{% load static %}
 {% block content %}
-<section class="max-w-xl mx-auto py-10">
+<section class="max-w-3xl mx-auto py-10">
     <h1 class="text-3xl font-semibold mb-6">👤 My Profile</h1>
 
-    <div class="bg-white shadow p-6 rounded-xl">
-        {% if messages %}
-        {% for message in messages %}
-        <p class="text-green-600 mb-2">{{ message }}</p>
-        {% endfor %}
-        {% endif %}
+    {% if messages %}
+    {% for message in messages %}
+    <p class="text-green-600 mb-2">{{ message }}</p>
+    {% endfor %}
+    {% endif %}
 
-        <form method="post" enctype="multipart/form-data" class="space-y-4">
-            {% csrf_token %}
-
-            <!-- 🖼️ Profile Image -->
+    <div class="bg-white shadow p-6 rounded-xl flex flex-col md:flex-row items-start gap-6">
+        <!-- Profile Image -->
+        <div class="flex-shrink-0">
             {% if user.profile_image %}
             <img src="{{ user.profile_image.url }}" alt="Profile Image"
-                class="w-24 h-24 object-cover rounded-full shadow">
+                class="w-32 h-32 rounded-full object-cover shadow">
             {% else %}
-            <p class="text-gray-500">No profile image uploaded.</p>
+            <img src="{% static 'images/default_profile.png' %}" alt="Default"
+                class="w-32 h-32 rounded-full object-cover shadow">
             {% endif %}
+        </div>
 
-            <label class="block">
-                <span class="text-gray-700">Change Profile Image</span>
-                <input type="file" name="profile_image" class="w-full border px-3 py-2 rounded">
-            </label>
+        <!-- User Info -->
+        <div class="flex-1">
+            <p><strong>Full Name:</strong> {{ user.first_name }} {{ user.last_name }}</p>
+            <p><strong>Email:</strong> {{ user.email }}</p>
+            <p><strong>Phone:</strong> {{ user.phone }}</p>
 
-            <label class="block">
-                <span class="text-gray-700">First Name</span>
-                <input type="text" name="first_name" value="{{ user.first_name }}"
-                    class="w-full border px-3 py-2 rounded" />
-            </label>
+            <hr class="my-4">
 
-            <label class="block">
-                <span class="text-gray-700">Last Name</span>
-                <input type="text" name="last_name" value="{{ user.last_name }}"
-                    class="w-full border px-3 py-2 rounded" />
-            </label>
+            <p><strong>Baby Name:</strong> {{ profile.baby_name|default:"-" }}</p>
+            <p><strong>Baby DOB:</strong> {{ profile.baby_dob|date:"F j, Y"|default:"-" }}</p>
+            <p><strong>Baby Gender:</strong> {{ profile.baby_gender|default:"-" }}</p>
 
-            <label class="block">
-                <span class="text-gray-700">Email</span>
-                <input type="email" name="email" value="{{ user.email }}" class="w-full border px-3 py-2 rounded" />
-            </label>
-
-            <label class="block">
-                <span class="text-gray-700">Phone Number</span>
-                <input type="text" name="phone" value="{{ user.phone }}" class="w-full border px-3 py-2 rounded" />
-            </label>
-
-            <div class="flex justify-between items-center">
-                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-                    Save Changes
-                </button>
-                <a href="{% url 'user:change_password' %}" class="text-blue-600 underline">Change Password</a>
+            <div class="mt-6 flex flex-wrap gap-4">
+                <a href="{% url 'user:edit_profile' %}"
+                    class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Edit Profile</a>
+                <a href="{% url 'user:change_password' %}"
+                    class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">Change Password</a>
+                <a href="{% url 'user:address_book' %}"
+                    class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Manage Addresses</a>
+                <a href="{% url 'orders:order'%}"
+                    class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">My
+                    Orders</a>
             </div>
-        </form>
+        </div>
+    </div>
+
+    <!-- Address Overview -->
+    <div class="mt-10">
+        <h2 class="text-2xl font-semibold mb-4">🏠 Saved Addresses</h2>
+        {% if addresses %}
+        <div class="grid gap-4">
+            {% for address in addresses %}
+            <div class="border p-4 rounded-md bg-gray-50">
+                <p><strong>{{ address.name }}</strong> {% if address.is_default %}<span
+                        class="text-sm text-green-600">(Default)</span>{% endif %}</p>
+                <p>{{ address.phone }}</p>
+                <p>{{ address.address_line1 }}</p>
+                {% if address.address_line2 %}<p>{{ address.address_line2 }}</p>{% endif %}
+                <p>{{ address.city }}, {{ address.state }} - {{ address.postal_code }}</p>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-500">No addresses saved yet.</p>
+        {% endif %}
     </div>
 </section>
 {% endblock %}

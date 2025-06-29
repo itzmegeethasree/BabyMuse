@@ -1,0 +1,75 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% load cart_extras %}
+
+{% block content %}
+<section class="max-w-6xl mx-auto py-10 grid grid-cols-1 md:grid-cols-2 gap-8">
+
+  <!-- 🧾 Address & Summary -->
+  <form method="POST" class="space-y-6">
+    {% csrf_token %}
+
+    <h2 class="text-2xl font-semibold">📍 Select Delivery Address</h2>
+
+    {% if addresses %}
+    {% for addr in addresses %}
+    <label class="block border rounded p-4 cursor-pointer">
+      <input type="radio" name="address" value="{{ addr.id }}" {% if addr.is_default or forloop.first %}checked{% endif
+        %}>
+      <strong>{{ addr.name }}</strong> - {{ addr.city }}, {{ addr.state }}<br>
+      {{ addr.phone }}<br>
+      {{ addr.address_line1 }}<br>
+      {% if addr.address_line2 %}
+      {{ addr.address_line2 }}<br>
+      {% endif %}
+      {% endif %}
+    </label>
+    {% endfor %}
+    <a href="{% url 'user:add_address' %}" class="text-blue-600 underline">➕ Add Address</a>
+
+    {% else %}
+    <p class="text-gray-500">
+      No addresses found.
+    </p>
+    {% endif %}
+
+    <!-- 💳 Order Summary -->
+    <h2 class="text-2xl font-semibold pt-4">💳 Order Summary</h2>
+    <div class="bg-gray-50 p-4 rounded space-y-2 text-gray-700">
+      <p>Subtotal: ₹{{ subtotal }}</p>
+      <p>Tax (5%): ₹{{ tax }}</p>
+      <p>Shipping: ₹{{ shipping }}</p>
+      <p class="text-green-600">Discount: ₹{{ discount }}</p>
+      <hr>
+      <p class="font-bold text-lg">Total: ₹{{ total }}</p>
+    </div>
+
+    <button type="submit" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700">
+      💵 Place Order (Cash on Delivery)
+    </button>
+  </form>
+
+  <!-- 🛒 Cart Products -->
+  <div>
+    <h2 class="text-2xl font-semibold mb-4">🛒 Items in Your Cart</h2>
+    {% if cart_items %}
+    {% for item in cart_items %}
+    <div class="flex gap-4 border-b py-4">
+      <img src="{{ item.product.image1.url }}" class="w-20 h-20 object-cover rounded" alt="{{ item.product.name }}">
+      <div>
+        <h3 class="font-semibold">{{ item.product.name }}</h3>
+        <p>Qty: {{ item.quantity }}</p>
+        <p>
+          Price: ₹{{ item.product.price }} × {{ item.quantity }} =
+          ₹{{ item.product.price|mul:item.quantity|floatformat:2 }}
+        </p>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="text-gray-500">Your cart is empty.</p>
+    {% endif %}
+  </div>
+
+</section>
+{% endblock %}

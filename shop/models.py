@@ -1,4 +1,4 @@
-from PIL.Image import Resampling  # Import the Resampling enum
+from PIL.Image import Resampling
 from django.utils.text import slugify
 from django.db import models
 from django.conf import settings
@@ -8,6 +8,7 @@ from PIL import Image
 import os
 from django.core.files.base import ContentFile
 from io import BytesIO
+from user.models import Address
 
 
 User = get_user_model()
@@ -113,9 +114,18 @@ class Order(models.Model):
         max_length=50, choices=ORDER_STATUS, default='Pending')
     total_price = models.DecimalField(
         max_digits=10, decimal_places=2, default=0)
+    address = models.ForeignKey(Address, on_delete=models.CASCADE, null=True)
+    payment_method = models.CharField(max_length=20, default='COD')
 
     def __str__(self):
         return f"Order #{self.id} - {self.user.username}"
+
+
+class OrderItem(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.PositiveIntegerField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
 
 
 class Wishlist(models.Model):
@@ -158,3 +168,10 @@ class Review(models.Model):
     rating = models.IntegerField(default=5)
     comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class ReturnRequest(models.Model):
+    order = models.ForeignKey(Order, on_delete=models.CASCADE)
+    reason = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    approved = models.BooleanField(default=False)

@@ -1,4 +1,4 @@
-from shop.models import Product, Order, Category, ProductImage
+from shop.models import ORDER_STATUS, Product, Order, Category, ProductImage, OrderItem, ReturnRequest
 from .models import AdminUser
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
@@ -125,36 +125,131 @@ def change_admin_password(request):
 
 @admin_login_required
 def admin_orders(request):
-    query = request.GET.get('q', '')
-    status_filter = request.GET.get('status', '')
-    orders = Order.objects.all()
+    query = request.GET.get('q', '').strip()
+    status_filter = request.GET.get('status', '').strip()
+    export_csv = request.GET.get('export') == 'csv'
+
+    # Fetch & filter orders
+    orders = Order.objects.select_related('user').all()
 
     if query:
-        orders = orders.filter(Q(order_id__icontains=query)
-                               | Q(user__name__icontains=query))
+        orders = orders.filter(
+            Q(id__icontains=query) |
+            Q(user__username__icontains=query) |
+            Q(user__first_name__icontains=query) |
+            Q(user__last_name__icontains=query)
+        )
+
     if status_filter:
         orders = orders.filter(status=status_filter)
 
-    if request.GET.get('export') == 'csv':
+    orders = orders.order_by('-created_at')
+
+    # ✅ Handle CSV Export
+    if export_csv:
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="orders.csv"'
+
         writer = csv.writer(response)
-        writer.writerow(['Order ID', 'User', 'Amount',
-                        'Status', 'Payment Method', 'Date'])
+        writer.writerow([
+            'Order ID', 'User', 'Amount',
+            'Status', 'Payment Method', 'Date'
+        ])
+
         for order in orders:
-            writer.writerow([order.order_id, order.user.name, order.total_amount, order.status,
-                            order.payment_method, order.created_at.strftime('%Y-%m-%d %H:%M')])
+            user_name = order.user.get_full_name() or order.user.username
+            writer.writerow([
+                order.id,
+                user_name,
+                order.total_price,
+                order.status,
+                order.payment_method,
+                order.created_at.strftime('%Y-%m-%d %H:%M'),
+            ])
+
         return response
 
-    paginator = Paginator(orders.order_by('-created_at'), 10)
+    # Pagination for HTML view
+    paginator = Paginator(orders, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
-    return render(request, 'admin_panel/orders.html', {'page_obj': page_obj, 'query': query, 'status_filter': status_filter})
+
+    return render(request, 'admin_panel/orders.html', {
+        'page_obj': page_obj,
+        'query': query,
+        'status_filter': status_filter,
+    })
 
 
 @admin_login_required
 def admin_order_detail(request, order_id):
     order = get_object_or_404(Order, id=order_id)
-    return render(request, 'admin_panel/order_detail.html', {'order': order})
+    order_items = OrderItem.objects.filter(order=order)
+    context = {
+        'order': order,
+        'order_items': order_items,
+        'status_choices': ORDER_STATUS,
+
+    }
+    return render(request, 'admin_panel/order_details.html', context)
+
+
+@admin_login_required
+def order_invoice(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    order_items = OrderItem.objects.filter(order=order)
+    context = {'order': order, 'order_items': order_items}
+    return render(request, 'admin_panel/order_invoice.html', context)
+
+
+@admin_login_required
+@require_POST
+def change_order_status(request, order_id):
+    order = get_object_or_404(Order, id=order_id)
+    new_status = request.POST.get('status')
+    if new_status in dict(ORDER_STATUS).keys():
+        order.status = new_status
+        order.save()
+        messages.success(
+            request, f"Order #{order.id} status changed to {new_status}")
+    else:
+        messages.error(request, "Invalid status selected.")
+    return redirect('admin_panel:admin_order_detail', order_id=order.id)
+
+
+@admin_login_required
+def verify_return_request(request, return_id):
+    return_request = get_object_or_404(ReturnRequest, id=return_id)
+    order = return_request.order
+    user = order.user
+
+    if return_request.approved:
+        messages.info(
+            request, "This return request has already been verified.")
+        return redirect('admin_return_requests')
+
+    # Mark the return as approved
+    return_request.approved = True
+    return_request.save()
+
+    # Refund full order amount to user's wallet
+    user.wallet_balance += order.total_price
+    user.save()
+
+    # Restock all products in the order
+    for item in order.items.all():
+        item.product.stock += item.quantity
+        item.product.save()
+
+    messages.success(
+        request, f"₹{order.total_price} has been refunded to {user.username}'s wallet.")
+    return redirect('admin_return_requests')
+
+
+@admin_login_required
+def admin_return_requests(request):
+    return_requests = ReturnRequest.objects.select_related(
+        'order__user').order_by('-created_at')
+    return render(request, 'admin_panel/return_requests.html', {'return_requests': return_requests})
 
 # product management
 
@@ -188,7 +283,6 @@ def admin_add_product(request):
         status = request.POST.get('status')
         images = request.FILES.getlist('images')
 
-        # ✅ Basic validation
         if not all([name, category_id, description, price, stock, status]):
             messages.error(request, "Please fill out all required fields.")
             return render(request, 'admin_panel/add_product.html', {
@@ -209,7 +303,7 @@ def admin_add_product(request):
                 'categories': categories
             })
 
-        # ✅ Create product
+        # Create product
         product = Product.objects.create(
             name=name,
             category=category,
@@ -219,7 +313,7 @@ def admin_add_product(request):
             status=status,
         )
 
-        # ✅ Save product images
+        #  Save product images
         for image_file in images:
             ProductImage.objects.create(product=product, image=image_file)
 
@@ -233,16 +327,13 @@ def process_image(image_file):
     try:
         # Open the uploaded image
         img = Image.open(image_file)
-        img = img.convert('RGB')  # Ensure compatibility (e.g. no transparency)
+        img = img.convert('RGB')
 
-        # Resize (maintain aspect ratio or force square)
-        img = img.resize((800, 800), Image.LANCZOS)  # High-quality resample
+        img = img.resize((800, 800), Image.LANCZOS)
 
-        # Save into memory buffer
         buffer = BytesIO()
         img.save(fp=buffer, format='JPEG', quality=85)
 
-        # Return Django-friendly ContentFile
         return ContentFile(buffer.getvalue(), name=image_file.name)
 
     except Exception as e:

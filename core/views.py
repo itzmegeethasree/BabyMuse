@@ -19,9 +19,8 @@ def home_view(request):
 
 
 def search(request):
-    query = request.GET.get('query', '')  # safer default
-    # TODO: Add logic to filter products or content based on the query
-    results = []  # mock empty result list for now
+    query = request.GET.get('query', '')
+    results = []
     return render(request, 'core/search_results.html', {
         'query': query,
         'results': results

@@ -1,0 +1,42 @@
+{% extends 'core/base.html' %}
+{% load cart_extras %}
+
+{% block content %}
+<section class="max-w-3xl mx-auto py-10">
+    <h2 class="text-2xl font-semibold mb-4">📍 My Addresses</h2>
+    <a href="{% url 'user:add_address' %}" class="bg-blue-600 text-white px-4 py-2 rounded mb-4 inline-block">➕ Add New
+        Address</a>
+
+    {% if addresses %}
+    <div class="space-y-4">
+        {% for addr in addresses %}
+        <div class="border p-4 rounded bg-white shadow">
+            <p>
+                <strong>{{ addr.name }}</strong>
+                {% if addr.is_default %}
+                <span class="text-green-600">(Default)</span>
+                {% endif %}
+            </p>
+            <p>{{ addr.phone }}</p>
+            <p>{{ addr.address_line1 }}</p>
+            {% if addr.address_line2 %}
+            <p>{{ addr.address_line2 }}</p>
+            {% endif %}
+            <p>{{ addr.city }}, {{ addr.state }} - {{ addr.postal_code }}</p>
+
+            <div class="mt-2 space-x-2">
+                <a href="{% url 'user:edit_address' addr.id %}" class="text-blue-600">Edit</a>
+                <form method="POST" action="{% url 'user:delete_address' addr.id %}" class="inline">
+                    {% csrf_token %}
+                    <button type="submit" class="text-red-600"
+                        onclick="return confirm('Delete this address?')">Delete</button>
+                </form>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-gray-500">No saved addresses.</p>
+    {% endif %}
+</section>
+{% endblock %}

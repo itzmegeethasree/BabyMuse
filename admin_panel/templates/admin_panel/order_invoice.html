@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+{% load custom_filters %}
+
+<head>
+    <meta charset="UTF-8">
+    <title>Invoice #{{ order.id }}</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            padding: 40px;
+        }
+
+        .header,
+        .footer {
+            text-align: center;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        .totals {
+            text-align: right;
+            margin-top: 20px;
+        }
+
+        .btn-print {
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        @media print {
+            .btn-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <h1>BabyMuse</h1>
+        <p>Order Invoice</p>
+    </div>
+
+    <p><strong>Order ID:</strong> #{{ order.id }}</p>
+    <p><strong>Customer:</strong> {{ order.user.full_name }}</p>
+    <p><strong>Email:</strong> {{ order.user.email }}</p>
+    <p><strong>Date:</strong> {{ order.created_at|date:"d M Y, h:i A" }}</p>
+    <p><strong>Status:</strong> {{ order.status }}</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Qty</th>
+                <th>Unit Price</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in order_items %}
+            <tr>
+                <td>{{ item.product.name }}</td>
+                <td>{{ item.quantity }}</td>
+                <td>₹{{ item.price }}</td>
+                <td>₹{{ item.quantity|mul:item.price }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="totals">
+        <p><strong>Total Amount:</strong> ₹{{ order.total_price }}</p>
+    </div>
+
+    <div class="btn-print">
+        <button onclick="window.print()">🖨️ Print Invoice</button>
+    </div>
+
+    <div class="footer">
+        <p>Thank you for shopping with BabyMuse!</p>
+    </div>
+</body>
+
+</html>

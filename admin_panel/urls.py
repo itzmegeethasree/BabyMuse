@@ -23,6 +23,16 @@ urlpatterns = [
     path('orders/', views.admin_orders, name='admin_orders'),
     path('orders/<int:order_id>/', views.admin_order_detail,
          name='admin_order_detail'),
+    path('orders/<int:order_id>/invoice/',
+         views.order_invoice, name='admin_order_invoice'),
+    path('orders/<int:order_id>/change-status/',
+         views.change_order_status, name='admin_change_order_status'),
+    path('returns/', views.admin_return_requests, name='admin_return_requests'),
+    path('returns/<int:return_id>/verify/',
+         views.verify_return_request, name='verify_return_request'),
+
+
+
 
     # Products
     path('products/', views.admin_products, name='admin_products'),

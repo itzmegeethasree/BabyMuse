@@ -70,10 +70,10 @@ def product_detail(request, pk):
 
         context = {
             'product': product,
-            'images': product.images.all(),  # 👈 needed for thumbnails
+            'images': product.images.all(),
             'reviews': reviews,
             'avg_rating': round(avg_rating, 1) if avg_rating is not None else 0,
-            'review_count': total_reviews,  # 👈 renamed for template clarity
+            'review_count': total_reviews,
         }
         return render(request, 'shop/product_detail.html', context)
 
@@ -87,8 +87,6 @@ def wishlist_view(request):
     wishlist_items = Wishlist.objects.filter(user=request.user).select_related(
         'product').prefetch_related('product__images')
 
-    # wishlist_items = Wishlist.objects.filter(
-    #     user=request.user).select_related('product')
     return render(request, 'shop/wishlist.html', {'wishlist_items': wishlist_items})
 
 

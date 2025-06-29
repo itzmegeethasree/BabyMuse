@@ -1,0 +1,36 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<div class="max-w-4xl mx-auto py-8">
+    <h2 class="text-2xl font-bold mb-6">📦 My Orders</h2>
+    <form method="get" class="mb-4">
+        <input type="text" name="q" placeholder="Search by Order ID" class="border p-2 rounded"
+            value="{{ request.GET.q }}">
+        <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded">Search</button>
+    </form>
+
+
+    {% if orders %}
+    <div class="space-y-4">
+        {% for order in orders %}
+        <div class="p-4 border rounded bg-white shadow">
+            <div class="flex justify-between items-center">
+                <div>
+                    <p><strong>Order #{{ order.id }}</strong> - {{ order.status }}</p>
+                    <p class="text-sm text-gray-500">Placed on {{ order.created_at|date:"d M Y, H:i" }}</p>
+                    <p>Total: ₹{{ order.total_price }}</p>
+                </div>
+                <div class="space-x-2">
+                    <a href="{% url 'orders:order_detail' order.id %}" class="text-blue-600 underline">Details</a>
+                    {% if order.status != 'Cancelled' and order.status != 'Delivered' %}
+                    <a href="{% url 'orders:order_cancel' order.id %}" class="text-red-600 underline">Cancel</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-gray-600">You haven’t placed any orders yet.</p>
+    {% endif %}
+</div>
+{% endblock %}

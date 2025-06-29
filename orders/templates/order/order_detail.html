@@ -1,0 +1,31 @@
+{% extends 'core/base.html' %}
+{% block content %}
+<section class="max-w-4xl mx-auto py-6">
+    <h2 class="text-2xl font-semibold mb-4">📦 Order #{{ order.id }} Details</h2>
+
+    <p><strong>Status:</strong> {{ order.status }}</p>
+    <p><strong>Date:</strong> {{ order.created_at }}</p>
+    <p><strong>Total:</strong> ₹{{ order.total_price }}</p>
+
+    <h3 class="mt-6 font-semibold">🛒 Items</h3>
+    <ul class="list-disc ml-6">
+        {% for item in order.orderitem_set.all %}
+        <li>{{ item.product.name }} (x{{ item.quantity }}) - ₹{{ item.price }}</li>
+        {% endfor %}
+    </ul>
+
+    {% if order.status == "Delivered" %}
+    <a href="{% url 'orders:return_order' order.id %}" class="text-red-600 underline block mt-4">🔁 Request Return</a>
+
+    <a href="{% url 'orders:download_invoice' order.id %}" class="text-blue-600 underline block mt-2">📄 Download
+        Invoice</a>
+    {% endif %}
+    {% if order.status == "Pending" %}
+    <div class="mt-4">
+        <a href="{% url 'orders:order_cancel' order.id %}" class="text-red-600 underline">❌ Cancel Order</a>
+    </div>
+    {% endif %}
+
+
+</section>
+{% endblock %}
