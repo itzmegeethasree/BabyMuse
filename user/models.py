@@ -12,6 +12,8 @@ class CustomUser(AbstractUser):
         upload_to='profile_images/', blank=True, null=True)
 
     email = models.EmailField(unique=True)
+    wallet_balance = models.DecimalField(
+        max_digits=10, decimal_places=2, default=0)
 
     def __str__(self):
         return self.username

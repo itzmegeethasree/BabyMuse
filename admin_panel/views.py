@@ -206,13 +206,18 @@ def order_invoice(request, order_id):
 def change_order_status(request, order_id):
     order = get_object_or_404(Order, id=order_id)
     new_status = request.POST.get('status')
+
     if new_status in dict(ORDER_STATUS).keys():
+        if order.status != 'Cancelled' and new_status == 'Cancelled':
+            # Restore stock only if moving to Cancelled
+            for item in order.orderitem_set.all():
+                item.product.stock += item.quantity
+                item.product.save()
+
         order.status = new_status
         order.save()
         messages.success(
-            request, f"Order #{order.id} status changed to {new_status}")
-    else:
-        messages.error(request, "Invalid status selected.")
+            request, f"Order #{order.id} status updated to {new_status}")
     return redirect('admin_panel:admin_order_detail', order_id=order.id)
 
 
@@ -225,7 +230,7 @@ def verify_return_request(request, return_id):
     if return_request.approved:
         messages.info(
             request, "This return request has already been verified.")
-        return redirect('admin_return_requests')
+        return redirect('admin_panel:admin_return_requests')
 
     # Mark the return as approved
     return_request.approved = True
@@ -236,20 +241,20 @@ def verify_return_request(request, return_id):
     user.save()
 
     # Restock all products in the order
-    for item in order.items.all():
+    for item in OrderItem.all():
         item.product.stock += item.quantity
         item.product.save()
 
     messages.success(
         request, f"₹{order.total_price} has been refunded to {user.username}'s wallet.")
-    return redirect('admin_return_requests')
+    return redirect('admin_panel:admin_return_requests')
 
 
 @admin_login_required
 def admin_return_requests(request):
     return_requests = ReturnRequest.objects.select_related(
         'order__user').order_by('-created_at')
-    return render(request, 'admin_panel/return_requests.html', {'return_requests': return_requests})
+    return render(request, 'admin_panel/return_request.html', {'return_requests': return_requests})
 
 # product management
 

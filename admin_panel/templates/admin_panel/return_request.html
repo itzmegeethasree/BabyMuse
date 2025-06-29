@@ -1,3 +1,6 @@
+{% extends 'admin_panel/base.html' %}
+{% block content %}
+
 <table class="w-full border">
     <thead>
         <tr class="bg-gray-100">
@@ -25,7 +28,7 @@
             </td>
             <td class="px-4 py-2">
                 {% if not request.approved %}
-                <a href="{% url 'verify_return_request' request.id %}"
+                <a href="{% url 'admin_panel:verify_return_request' request.id %}"
                     class="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">Verify</a>
                 {% else %}
                 <span class="text-gray-500">Verified</span>
@@ -35,3 +38,4 @@
         {% endfor %}
     </tbody>
 </table>
+{% endblock %}
