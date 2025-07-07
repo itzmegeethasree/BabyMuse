@@ -14,6 +14,16 @@ urlpatterns = [
     path('return/<int:order_id>/', views.return_order, name='return_order'),
     path('invoice/<int:order_id>/',
          views.download_invoice, name='download_invoice'),
+    path('razorpay/success/', views.razorpay_success, name='razorpay_success'),
+    path('payment-failed/<int:order_id>/',
+         views.payment_failed_view, name='payment_failed'),
+    path('payment-webhook/', views.razorpay_webhook, name='razorpay_webhook'),
+    path('apply-coupon/', views.apply_coupon, name='apply_coupon'),
+    path('remove-coupon/', views.remove_coupon, name='remove_coupon'),
+
+
+
+
 
 
 

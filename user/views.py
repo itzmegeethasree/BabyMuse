@@ -1,5 +1,5 @@
 from django.contrib.auth import login
-from django.shortcuts import render, redirect
+from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth import get_user_model
 from django.contrib import messages
@@ -8,11 +8,12 @@ import random
 from django.core.mail import send_mail
 from django.utils import timezone
 from datetime import timedelta
-from .models import EmailOTP, Profile, Address
+from .models import Profile, Address
 from django.contrib.auth.decorators import login_required
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.contrib.auth import update_session_auth_hash
 from django.views.decorators.http import require_POST
+from django.core.exceptions import ValidationError
 
 
 User = get_user_model()
@@ -106,11 +107,19 @@ def user_logout(request):
     return redirect('home')
 
 
-def send_otp(email):
-    otp_obj, _ = EmailOTP.objects.get_or_create(email=email)
-    otp_obj.generate_otp()
+def otp_signup_request(request):
+    if request.method == 'POST':
+        email = request.POST.get('email')
+        if User.objects.filter(email=email).exists():
+            messages.error(request, "email already registered.")
+            return redirect('user:user_register')
 
-    print(f"🔐 OTP for {email} is: {otp_obj.otp}")
+        otp = str(random.randint(100000, 999999))
+        request.session['reset_email'] = email
+        request.session['reset_otp'] = otp
+        request.session['otp_expiry'] = (
+            timezone.now() + timedelta(minutes=2)).isoformat()
+        print(f"🔐 OTP for {email} is: {otp}")
 
     # send_mail(
     #     subject='Your OTP for BabyMuse Signup',
@@ -119,81 +128,78 @@ def send_otp(email):
     #     recipient_list=[email],
     # )
 
-
-def otp_signup_request(request):
-    if request.method == 'POST':
-        email = request.POST.get('email')
-        send_otp(email)
-        request.session['email'] = email
         return redirect('user:verify_otp')
     return render(request, 'user/otp_request.html')
 
 
 def otp_verify(request):
-    email = request.session.get('email')
-    otp_record = None
-
+    expiry_str = request.session.get('otp_expiry')
+    expiry_time = timezone.datetime.fromisoformat(expiry_str)
+    time_left = (expiry_time - timezone.now()).total_seconds()
+    if time_left < 0:
+        time_left = 0
     if request.method == 'POST':
-        entered_otp = request.POST.get('otp')
-        try:
-            otp_record = EmailOTP.objects.get(email=email)
-            if otp_record.otp == entered_otp:
-                return redirect('user:set_password')
-            else:
-                messages.error(request, 'Invalid OTP')
-        except EmailOTP.DoesNotExist:
-            messages.error(request, 'No OTP sent. Please try again.')
-            return redirect('user:otp_signup_request')
-
-    if otp_record and timezone.now() - otp_record.created_at > timedelta(minutes=5):
-        messages.error(request, 'OTP expired. Please request again.')
-        otp_record.delete()
-        return redirect('user:otp_signup_request')
-
-    return render(request, 'user/otp_verify.html')
+        entered_otp = request.POST['otp']
+        if entered_otp == request.session.get('reset_otp'):
+            return redirect('user:signup')
+        else:
+            messages.error(request, 'Incorrect OTP.')
+    return render(request, 'user/otp_verify.html', {'time_left': int(time_left)})
 
 
 def resend_otp(request):
-    email = request.session.get('email')
+    email = request.session.get('reset_email')
     if email:
-        send_otp(email)
-        messages.success(request, 'OTP resent successfully!')
+        try:
+            otp = str(random.randint(100000, 999999))
+            request.session['reset_otp'] = otp
+            request.session['otp_expiry'] = (
+                timezone.now() + timedelta(minutes=1)).isoformat()
+            print(f"📧 Email register resend OTP for {email} is: {otp}")
+            messages.success(request, 'New OTP sent.')
+        except:
+            messages.error(request, 'Failed to resend OTP.')
     return redirect('user:verify_otp')
 
 
-def set_password(request):
-    email = request.session.get('email')
+def signup(request):
+    email = request.session.get('reset_email')
     if not email:
         messages.error(request, 'Session expired or email not found.')
         return redirect('user:signup_request')
 
     if request.method == 'POST':
+        firstname = request.POST.get('firstname', '').strip()
+        lastname = request.POST.get('lastname', '').strip()
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password')
         confirm = request.POST.get('confirm_password')
 
         if password != confirm:
             messages.error(request, 'Passwords do not match.')
-            return redirect('user:set_password')
+            return redirect('user:signup')
 
         if not is_strong_password(password):
             messages.error(request, "Weak password.")
-            return redirect('user:set_password')
+            return redirect('user:signup')
 
         if User.objects.filter(email=email).exists():
             messages.error(request, 'User already exists.')
             return redirect('user:user_login')
+        if User.objects.filter(username=username).exists():
+            messages.error(request, 'Username already exists.')
+            return redirect('user:signup')
 
         user = User.objects.create_user(
-            username=username, email=email, password=password
+            first_name=firstname, last_name=lastname, username=username, email=email, password=password
         )
         user.backend = 'django.contrib.auth.backends.ModelBackend'
         login(request, user)
 
         messages.success(request, 'Account created successfully.')
-        return redirect('home')
+        return redirect('user:user_login')
 
-    return render(request, 'user/set_password.html')
+    return render(request, 'user/signup.html')
 
 
 @login_required
@@ -228,7 +234,7 @@ def change_password(request):
             update_session_auth_hash(
                 request, request.user)
             messages.success(request, "Password updated successfully.")
-            return redirect('user:profile')
+            return redirect('user:user_login')
 
     return render(request, 'user/change_password.html')
 
@@ -251,12 +257,31 @@ def edit_profile(request):
         baby_dob = request.POST.get('baby_dob')
         baby_gender = request.POST.get('baby_gender')
 
-        # Update user fields (except email for now)
+        # Update user fields
         user.first_name = first_name
         user.last_name = last_name
         user.phone = phone
+        ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp']
+        MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
+
         if profile_image:
+            ext = profile_image.name.split('.')[-1].lower()
+            if ext not in ALLOWED_EXTENSIONS:
+                messages.error(
+                    request, "Only JPG, PNG, and WEBP images are allowed.")
+                return redirect('user:edit_profile')
+
+            if profile_image.size > MAX_FILE_SIZE:
+                messages.error(request, "Image file size must not exceed 2MB.")
+                return redirect('user:edit_profile')
             user.profile_image = profile_image
+
+        if phone:
+            phone = phone.strip()
+            if not re.match(r'^\d{10}$', phone):
+                messages.error(
+                    request, "Phone number must be exactly 10 digits.")
+                return redirect('user:edit_profile')
 
         # Update profile fields
         profile.baby_name = baby_name
@@ -267,7 +292,6 @@ def edit_profile(request):
             otp = str(random.randint(100000, 999999))
             request.session['pending_email'] = new_email
             request.session['email_otp'] = otp
-            # Simulate send
             print(f"📧 Email change OTP for {new_email} is: {otp}")
 
             # send_mail(
@@ -325,6 +349,13 @@ def address_book(request):
 @login_required
 def add_address(request):
     if request.method == 'POST':
+        is_default = 'is_default' in request.POST
+
+        if is_default:
+            # Unset previous default address for this user
+            Address.objects.filter(
+                user=request.user, is_default=True).update(is_default=False)
+
         Address.objects.create(
             user=request.user,
             name=request.POST.get('name'),
@@ -334,10 +365,12 @@ def add_address(request):
             city=request.POST.get('city'),
             state=request.POST.get('state'),
             postal_code=request.POST.get('postal_code'),
-            is_default='is_default' in request.POST
+            is_default=is_default
         )
+
         messages.success(request, "Address added successfully!")
         return redirect('user:address_book')
+
     return render(request, 'user/add_address.html', {
         'title': '➕ Add Address',
         'address': {}
@@ -346,7 +379,7 @@ def add_address(request):
 
 @login_required
 def edit_address(request, id):
-    address = Address.objects.get(id=id, user=request.user)
+    address = get_object_or_404(Address, id=id, user=request.user)
 
     if request.method == 'POST':
         address.name = request.POST.get('name')
@@ -356,7 +389,15 @@ def edit_address(request, id):
         address.city = request.POST.get('city')
         address.state = request.POST.get('state')
         address.postal_code = request.POST.get('postal_code')
-        address.is_default = 'is_default' in request.POST
+
+        is_default = 'is_default' in request.POST
+
+        if is_default:
+            # Unset all other default addresses
+            Address.objects.filter(user=request.user, is_default=True).exclude(
+                id=address.id).update(is_default=False)
+
+        address.is_default = is_default
         address.save()
 
         messages.success(request, "Address updated successfully!")
@@ -374,3 +415,92 @@ def delete_address(request, id):
     Address.objects.filter(id=id, user=request.user).delete()
     messages.success(request, "Address deleted.")
     return redirect('user:address_book')
+
+
+def forgot_password(request):
+    if request.method == 'POST':
+        email = request.POST['email']
+        try:
+            user = User.objects.get(email=email)
+            otp = str(random.randint(100000, 999999))
+            request.session['reset_email'] = email
+            request.session['reset_otp'] = otp
+            request.session['otp_expiry'] = (
+                timezone.now() + timedelta(minutes=1)).isoformat()
+            print(f"📧 Email change OTP for {email} is: {otp}")
+
+            # send_mail(
+            #     'Your BabyMuse Password Reset OTP',
+            #     f'Hello {user.first_name},\n\nYour OTP for password reset is: {otp}\n\nThis OTP is valid for 2 minutes.',
+            #     'noreply@babymuse.com',
+            #     [email],
+            #     fail_silently=False,
+            # )
+            return redirect('user:verify_reset_otp')
+        except User.DoesNotExist:
+            messages.error(request, "No user found with this email.")
+    return render(request, 'user/forgot_password.html')
+
+# Step 2: OTP Verification
+
+
+def verify_reset_otp(request):
+    expiry_str = request.session.get('otp_expiry')
+    expiry_time = timezone.datetime.fromisoformat(expiry_str)
+    time_left = (expiry_time - timezone.now()).total_seconds()
+    if time_left < 0:
+        time_left = 0
+    if request.method == 'POST':
+        entered_otp = request.POST['otp']
+        if entered_otp == request.session.get('reset_otp'):
+            return redirect('user:reset_password')
+        else:
+            messages.error(request, 'Incorrect OTP.')
+    return render(request, 'user/verify_reset_otp.html', {'time_left': int(time_left)})
+
+# Step 3: Resend OTP
+
+
+def resend_reset_otp(request):
+    email = request.session.get('reset_email')
+    if email:
+        try:
+            user = User.objects.get(email=email)
+            otp = str(random.randint(100000, 999999))
+            request.session['reset_otp'] = otp
+            request.session['otp_expiry'] = (
+                timezone.now() + timedelta(minutes=1)).isoformat()
+            print(f"📧 Email change OTP for {email} is: {otp}")
+
+            # send_mail(
+            #     'Your New OTP for BabyMuse Password Reset',
+            #     f'Hello {user.first_name},\n\nYour new OTP is: {otp}\n\nIt is valid for 2 minutes.',
+            #     'noreply@babymuse.com',
+            #     [email],
+            #     fail_silently=False,
+            # )
+            messages.success(request, 'New OTP sent.')
+        except:
+            messages.error(request, 'Failed to resend OTP.')
+    return redirect('user:verify_reset_otp')
+
+# Step 4: Password Reset
+
+
+def reset_password(request):
+    if request.method == 'POST':
+        pwd1 = request.POST['password1']
+        pwd2 = request.POST['password2']
+        if pwd1 != pwd2:
+            messages.error(request, "Passwords don't match.")
+        else:
+            try:
+                user = User.objects.get(
+                    email=request.session.get('reset_email'))
+                user.set_password(pwd1)
+                user.save()
+                messages.success(request, 'Password reset successfully.')
+                return redirect('user:user_login')
+            except:
+                messages.error(request, 'Something went wrong.')
+    return render(request, 'user/reset_password.html')

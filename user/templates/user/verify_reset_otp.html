@@ -1,0 +1,44 @@
+{% extends 'core/base.html' %}
+{% block content %}
+
+<div class="max-w-md mx-auto mt-10 space-y-6">
+    <form method="POST">
+        {% csrf_token %}
+        <input type="text" name="otp" placeholder="Enter OTP" required class="w-full p-2 border rounded">
+        <button class="bg-green-600 text-white px-4 py-2 rounded mt-3">Verify OTP</button>
+    </form>
+
+    <p id="timer" class="text-center text-gray-600"></p>
+
+    <form method="POST" action="{% url 'user:resend_reset_otp' %}">
+        {% csrf_token %}
+        <button id="resendBtn" class="bg-yellow-600 text-white px-4 py-2 rounded hidden">Resend OTP</button>
+    </form>
+</div>
+<script>
+    let timeLeft = {{ time_left }};
+    const timerEl = document.getElementById("timer");
+    const resendBtn = document.getElementById("resendBtn");
+
+    function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function startTimer() {
+        const interval = setInterval(() => {
+            if (timeLeft > 0) {
+                timerEl.innerText = `OTP valid for: ${formatTime(timeLeft)}`;
+                timeLeft--;
+            } else {
+                clearInterval(interval);
+                timerEl.innerText = "OTP expired.";
+                resendBtn.classList.remove("hidden");
+            }
+        }, 1000);
+    }
+
+    startTimer();
+</script>
+{% endblock %}

@@ -116,6 +116,8 @@ class Order(models.Model):
         max_digits=10, decimal_places=2, default=0)
     address = models.ForeignKey(Address, on_delete=models.CASCADE, null=True)
     payment_method = models.CharField(max_length=20, default='COD')
+    razorpay_order_id = models.CharField(max_length=100, blank=True, null=True)
+    is_paid = models.BooleanField(default=False)
 
     def __str__(self):
         return f"Order #{self.id} - {self.user.username}"

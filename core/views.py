@@ -1,6 +1,5 @@
 from django.shortcuts import render
-from django.contrib.auth.decorators import login_required
-from shop.models import Product, Wishlist, CartItem
+from shop.models import Product
 
 
 def home_view(request):
@@ -8,14 +7,19 @@ def home_view(request):
         products = Product.objects.filter(status='Active', category__name__in=[
                                           'Custom', 'Personalized'])
         customized = True
+        return render(request, 'core/home.html', {
+            'products': products,
+            'customized': customized,
+        })
+
     else:
         products = Product.objects.filter(status='Active')[:6]
         customized = False
 
-    return render(request, 'core/home.html', {
-        'products': products,
-        'customized': customized,
-    })
+        return render(request, 'core/home.html', {
+            'products': products,
+            'customized': customized,
+        })
 
 
 def search(request):

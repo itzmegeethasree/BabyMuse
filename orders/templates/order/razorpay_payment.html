@@ -1,0 +1,75 @@
+{% extends 'core/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto p-8 text-center">
+    <h2 class="text-3xl font-bold mb-6">Complete Your Payment</h2>
+
+
+    <div class="bg-white border p-6 rounded shadow text-left space-y-4">
+        <p><strong>Order ID:</strong> {{ order.id }}</p>
+        <p><strong>Total Amount:</strong> ₹{{ order.total_price }}</p>
+        <p><strong>Payment Method:</strong> Razorpay</p>
+    </div>
+
+    <button id="rzp-button" class="mt-6 bg-green-600 hover:bg-green-700 text-white font-semibold px-6 py-3 rounded">
+        Pay Now with Razorpay
+    </button>
+</div>
+
+<!-- Razorpay Checkout Script -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+
+<script>
+
+    const options = {
+        key: "{{ razorpay_key }}", // From Django settings
+        amount: "{{ amount }}",       // Amount in paise
+        currency: "INR",
+        name: "BabyMuse",
+        description: "Payment for Order #{{ order.id }}",
+        image: "{% static 'images/logo.png' %}",  // Optional logo
+        order_id: "{{ razorpay_order_id }}", // Razorpay order ID
+
+        handler: function (response) {
+            // POST payment success info to server
+            fetch("{% url 'orders:razorpay_success' %}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': '{{ csrf_token }}'
+                },
+                body: JSON.stringify({
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_signature: response.razorpay_signature,
+                    order_id: "{{ order.id }}"
+                })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        window.location.href = data.redirect_url;
+                    } else {
+                        window.location.href = data.redirect_url;
+                    }
+                });
+        },
+
+        prefill: {
+            name: "{{ user_name }}",
+            email: "{{ user_email }}"
+        },
+
+        theme: {
+            color: "#f97316"
+        }
+    };
+
+    const rzp = new Razorpay(options);
+    document.getElementById('rzp-button').onclick = function (e) {
+        rzp.open();
+        e.preventDefault();
+    }
+</script>
+{% endblock %}

@@ -35,20 +35,20 @@
         <!-- Wishlist Icon -->
         <a href="{% url 'wishlist' %}" class="relative text-gray-600 hover:text-pink-500 text-xl">
           <i class="fas fa-heart"></i>
-          {% if wishlist_count %}
-          <span
-            class="absolute -top-2 -right-2 bg-pink-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
+          <span id="wish-count" class="absolute -top-2 -right-2 bg-pink-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full
+        {% if wishlist_count == 0 %}hidden{% endif %}">
             {{ wishlist_count }}
           </span>
-          {% endif %}
         </a>
 
         <!-- Cart Icon -->
         <a href="{% url 'cart' %}" class="relative text-gray-600 hover:text-pink-500 text-xl">
           <i class="fa-solid fa-cart-shopping"></i>
-          <span id="cart-count"
-            class="absolute -top-2 -right-2 bg-pink-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full">
-            {{ cart_count }}
+
+          <span id="cart-count" class="absolute -top-2 -right-2 bg-pink-500 text-white text-xs w-5 h-5 flex items-center justify-center rounded-full 
+            {% if cart_count == 0 %}hidden{% endif %}">
+
+            {{ cart_count|default:0 }}
           </span>
         </a>
         {% else %}

@@ -64,6 +64,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'social_django.middleware.SocialAuthExceptionMiddleware',
 
+
 ]
 
 ROOT_URLCONF = 'babymuse.urls'
@@ -170,3 +171,7 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'geethasree95@gmail.com'
 EMAIL_HOST_PASSWORD = 'ydwnjkwuamattcwj'
+RAZORPAY_KEY_ID = config("RAZORPAY_KEY_ID")
+RAZORPAY_KEY_SECRET = config("RAZORPAY_KEY_SECRET")
+
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')

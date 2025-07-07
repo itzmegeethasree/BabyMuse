@@ -22,16 +22,6 @@ class CustomUser(AbstractUser):
 User = get_user_model()
 
 
-class EmailOTP(models.Model):
-    email = models.EmailField(unique=True)
-    otp = models.CharField(max_length=6)
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    def generate_otp(self):
-        self.otp = str(random.randint(100000, 999999))
-        self.save()
-
-
 class Profile(models.Model):
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

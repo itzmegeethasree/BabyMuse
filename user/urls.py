@@ -9,14 +9,19 @@ urlpatterns = [
     path('otp-signup/', views.otp_signup_request, name='signup_request'),
     path('verify-otp/', views.otp_verify, name='verify_otp'),
     path('resend-otp/', views.resend_otp, name='resend_otp'),
-    path('set-password/', views.set_password, name='set_password'),
+    path('signup/', views.signup, name='signup'),
     path('profile/', views.profile_view, name='profile'),
     path('edit-profile/', views.edit_profile, name='edit_profile'),
     path('profile/verify-email-otp/',
          views.verify_email_otp, name='verify_email_otp'),
+    path('forgot-password/', views.forgot_password, name='forgot_password'),
+    path('verify-reset-otp/', views.verify_reset_otp, name='verify_reset_otp'),
+    path('resend-reset-otp/', views.resend_reset_otp, name='resend_reset_otp'),
+    path('reset-password/', views.reset_password, name='reset_password'),
+
 
     path('change-password/', views.change_password, name='change_password'),
-    path('forgot/', views.otp_signup_request, name='forgot_password'),
+    path('forgot/', views.otp_signup_request, name='forgot_password1'),
 
     path('address/', views.address_book, name='address_book'),
     path('address/add/', views.add_address, name='add_address'),

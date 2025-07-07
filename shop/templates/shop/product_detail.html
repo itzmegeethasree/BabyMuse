@@ -123,6 +123,24 @@
     toast.classList.remove("hidden");
     setTimeout(() => toast.classList.add("hidden"), 3000);
   }
+  function updateCartCount(count) {
+    const el = document.getElementById("cart-count");
+    if (el) {
+      el.innerText = count;
+      if (count > 0) el.classList.remove("hidden");
+      else el.classList.add("hidden");
+    }
+  }
+  function updateWishlistCount(count) {
+    const el = document.getElementById("wish-count");
+    if (el) {
+      el.innerText = count;
+      if (count > 0) el.classList.remove("hidden");
+      else el.classList.add("hidden");
+    }
+  }
+
+
 
   document.addEventListener("DOMContentLoaded", function () {
     const cartBtn = document.getElementById("add-to-cart-btn");
@@ -142,6 +160,8 @@
           .then(res => res.json())
           .then(data => {
             if (data.status === 'success') {
+              updateCartCount(data.cart_count);
+
               showToast("Added to cart!");
               document.getElementById("cart-count").innerText = data.cart_count;
             } else {
@@ -165,6 +185,8 @@
           .then(res => res.json())
           .then(data => {
             if (data.status === 'added') {
+              updateWishlistCount(data.wishlist_count);
+
               showToast("Added to wishlist!");
             } else {
               showToast("Already in wishlist", false);

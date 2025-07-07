@@ -11,7 +11,7 @@ from .models import Product, Category, Wishlist, CartItem, Review
 
 
 def shop_view(request):
-    products = Product.objects.filter(status='Active')
+    products = Product.objects.filter(status='Active').exclude(is_deleted=True)
 
     search_query = request.GET.get('search', '')
     category_id = request.GET.get('category', '')
@@ -82,11 +82,12 @@ def product_detail(request, pk):
         return redirect('shop')
 
 
+# ------------------- WISHLIST --------------------
+
 @login_required
 def wishlist_view(request):
-    wishlist_items = Wishlist.objects.filter(user=request.user).select_related(
-        'product').prefetch_related('product__images')
-
+    wishlist_items = Wishlist.objects.filter(
+        user=request.user).select_related('product')
     return render(request, 'shop/wishlist.html', {'wishlist_items': wishlist_items})
 
 
@@ -97,7 +98,11 @@ def ajax_add_to_wishlist(request):
     product = get_object_or_404(Product, id=product_id)
     wishlist_item, created = Wishlist.objects.get_or_create(
         user=request.user, product=product)
-    return JsonResponse({'status': 'added' if created else 'exists'})
+    wish_count = Wishlist.objects.filter(user=request.user).count()
+    return JsonResponse({
+        'status': 'added' if created else 'exists',
+        'wishlist_count': wish_count
+    })
 
 
 @login_required
@@ -106,42 +111,45 @@ def ajax_remove_from_wishlist(request):
     data = json.loads(request.body)
     product_id = data.get("product_id")
     Wishlist.objects.filter(user=request.user, product_id=product_id).delete()
-    return JsonResponse({"status": "success", "message": "Removed from wishlist"})
+    wish_count = Wishlist.objects.filter(user=request.user).count()
+    return JsonResponse({
+        "status": "success",
+        "message": "Removed from wishlist",
+        "wishlist_count": wish_count
+    })
+# -------------------- CART ----------------------
 
 
 @login_required
 def cart_view(request):
-    cart_items = CartItem.objects.filter(user=request.user).select_related(
-        'product').prefetch_related('product__images')
-
-    # Add total per item and total cart price
+    cart_items = CartItem.objects.filter(
+        user=request.user).select_related('product')
     for item in cart_items:
         item.total_price = item.quantity * item.product.price
+    total_price = round(sum(item.total_price for item in cart_items), 2)
 
-    total_price = sum(item.total_price for item in cart_items)
-
-    return render(request, 'shop/cart.html', {
-        'cart_items': cart_items,
-        'total_price': total_price,
-    })
+    return render(request, 'shop/cart.html', {'cart_items': cart_items, 'total_price': total_price})
 
 
 @login_required
 @require_POST
 def ajax_add_to_cart(request):
     product_id = request.POST.get('product_id')
-    try:
-        product = Product.objects.get(id=product_id)
-        cart_item, created = CartItem.objects.get_or_create(
-            user=request.user, product=product)
-        if not created:
-            cart_item.quantity += 1
-            cart_item.save()
+    product = get_object_or_404(Product, id=product_id)
 
-        cart_count = CartItem.objects.filter(user=request.user).count()
-        return JsonResponse({'status': 'success', 'cart_count': cart_count})
-    except Product.DoesNotExist:
-        return JsonResponse({'status': 'error', 'message': 'Product not found'})
+    if product.stock < 1:
+        return JsonResponse({'status': 'error', 'message': 'Out of stock'})
+
+    cart_item, created = CartItem.objects.get_or_create(
+        user=request.user, product=product)
+    if not created:
+        if cart_item.quantity >= product.stock:
+            return JsonResponse({'status': 'error', 'message': 'Stock limit reached'})
+        cart_item.quantity += 1
+        cart_item.save()
+
+    cart_count = CartItem.objects.filter(user=request.user).count()
+    return JsonResponse({'status': 'success', 'cart_count': cart_count})
 
 
 @login_required
@@ -152,7 +160,10 @@ def ajax_remove_from_cart(request):
     try:
         item = CartItem.objects.get(user=request.user, product_id=product_id)
         item.delete()
-        return JsonResponse({"status": "success", "message": "Item removed from cart"})
+        total_price = sum(
+            i.quantity * i.product.price for i in CartItem.objects.filter(user=request.user)
+        )
+        return JsonResponse({"status": "success", "message": "Item removed from cart", "new_total_price": total_price})
     except CartItem.DoesNotExist:
         return JsonResponse({"status": "error", "message": "Item not found"})
 
@@ -162,11 +173,19 @@ def ajax_remove_from_cart(request):
 def ajax_update_cart_quantity(request, product_id):
     try:
         quantity = int(request.POST.get('quantity', 1))
-        if quantity < 1:
-            return JsonResponse({"status": "error", "message": "Quantity must be at least 1."})
-
         cart_item = CartItem.objects.get(
             user=request.user, product_id=product_id)
+
+        if quantity < 1:
+            cart_item.delete()
+            total_price = sum(
+                i.quantity * i.product.price for i in CartItem.objects.filter(user=request.user)
+            )
+            return JsonResponse({"status": "removed", "message": "Item removed from cart", "new_total": total_price})
+
+        if quantity > cart_item.product.stock:
+            return JsonResponse({"status": "error", "message": "Only {} in stock.".format(cart_item.product.stock)})
+
         cart_item.quantity = quantity
         cart_item.save()
 
@@ -193,7 +212,6 @@ def ajax_cart_data(request):
         user=request.user).select_related('product')
     data = []
     total_price = 0
-
     for item in cart_items:
         price = item.quantity * item.product.price
         total_price += price
@@ -204,5 +222,4 @@ def ajax_cart_data(request):
             'quantity': item.quantity,
             'total': price,
         })
-
     return JsonResponse({"status": "success", "items": data, "total_price": total_price})

@@ -39,8 +39,8 @@ urlpatterns = [
     path('products/new/', views.admin_add_product, name='admin_add_product'),
     path('products/<int:product_id>/edit/',
          views.admin_edit_product, name='admin_edit_product'),
-    path('products/<int:product_id>/delete/',
-         views.admin_delete_product, name='admin_delete_product'),
+    path('products/<int:product_id>/toggle/',
+         views.admin_toggle_product_visibility, name='admin_toggle_product'),
 
     # Categories
     path('categories/', views.category_list, name='admin_category_list'),

@@ -38,15 +38,17 @@ def custom_admin_login(request):
     if request.method == "POST":
         username = request.POST['username']
         password = request.POST['password']
+
         try:
             admin = AdminUser.objects.get(username=username)
             if check_password(password, admin.password):
-                request.session['admin_id'] = admin.id
+                request.session['admin_id'] = admin.id  # ✅ Session set
                 return redirect('admin_panel:admin_dashboard')
             else:
                 messages.error(request, "Incorrect password")
         except AdminUser.DoesNotExist:
             messages.error(request, "Admin user not found")
+
     return render(request, 'admin_panel/login.html')
 
 
@@ -145,7 +147,6 @@ def admin_orders(request):
 
     orders = orders.order_by('-created_at')
 
-    # ✅ Handle CSV Export
     if export_csv:
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = 'attachment; filename="orders.csv"'
@@ -169,7 +170,6 @@ def admin_orders(request):
 
         return response
 
-    # Pagination for HTML view
     paginator = Paginator(orders, 10)
     page_obj = paginator.get_page(request.GET.get('page'))
 
@@ -209,7 +209,6 @@ def change_order_status(request, order_id):
 
     if new_status in dict(ORDER_STATUS).keys():
         if order.status != 'Cancelled' and new_status == 'Cancelled':
-            # Restore stock only if moving to Cancelled
             for item in order.orderitem_set.all():
                 item.product.stock += item.quantity
                 item.product.save()
@@ -261,17 +260,35 @@ def admin_return_requests(request):
 
 @admin_login_required
 def admin_products(request):
-    products = Product.objects.filter(is_deleted=False).select_related(
+    search_query = request.GET.get('search', '')
+    category_id = request.GET.get('category', '')
+
+    products = Product.objects.all().select_related(
         'category').order_by('-created_at')
-    categories = Category.objects.filter(is_deleted=False)
-    paginator = Paginator(products, 10)  # 10 products per page
+
+   # Apply search filter
+    if search_query:
+        products = products.filter(name__icontains=search_query)
+
+    # Apply category filter
+    if category_id:
+        products = products.filter(category__id=category_id)
+
+    products = products.order_by('-created_at')
+
+    # Pagination
+    paginator = Paginator(products, 10)  # 10 per page
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
 
+    # All categories for dropdown
+    categories = Category.objects.filter(is_deleted=False)
+
     return render(request, 'admin_panel/products.html', {
-        'products': products,
+        'page_obj': page_obj,
         'categories': categories,
-        'page_obj': page_obj
+        'search_query': search_query,
+        'selected_category': category_id,
     })
 
 
@@ -348,7 +365,7 @@ def process_image(image_file):
 
 @admin_login_required
 def admin_edit_product(request, product_id):
-    product = get_object_or_404(Product, id=product_id, is_deleted=False)
+    product = get_object_or_404(Product, id=product_id)
 
     if request.method == 'POST':
         form = ProductForm(request.POST, request.FILES, instance=product)
@@ -377,11 +394,12 @@ def admin_edit_product(request, product_id):
 
 
 @admin_login_required
-def admin_delete_product(request, product_id):
+def admin_toggle_product_visibility(request, product_id):
     product = get_object_or_404(Product, id=product_id)
-    product.is_deleted = True
+    product.is_deleted = not product.is_deleted
     product.save()
-    messages.success(request, "Product deleted successfully.")
+    status = "listed" if not product.is_deleted else "unlisted"
+    messages.success(request, f"Product successfully {status}.")
     return redirect('admin_panel:admin_products')
 
 # category Management

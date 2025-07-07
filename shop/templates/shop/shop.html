@@ -15,8 +15,7 @@
       <select name="category" class="p-2 border border-gray-300 rounded-md col-span-1">
         <option value="">All Categories</option>
         {% for cat in categories %}
-        <option value="{{ cat.id }}" {% if cat.id|equals:selected_category %} selected{% endif %}>{{ cat.name
-          }}</option>
+        <option value="{{ cat.id }}" {% if cat.id|equals:selected_category %} selected{% endif %}>{{ cat.name}}</option>
         {% endfor %}
       </select>
 
@@ -71,11 +70,13 @@
               data-product-id="{{ product.id }}">
               ❤️ Wishlist
             </button>
+            {% if product.stock != 0 %}
 
             <button class="add-to-cart-btn bg-green-600 text-white px-3 py-1 rounded"
               data-product-id="{{ product.id }}">
               🛒 Add to Cart
             </button>
+            {% endif %}
           </div>
         </div>
       </div>
@@ -92,8 +93,7 @@
         class="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300">&laquo; Prev</a>
       {% endif %}
 
-      <span class="px-4 py-2 bg-pink-600 text-white rounded">{{ page_obj.number }} of {{ page_obj.paginator.num_pages
-        }}</span>
+      <span class="px-4 py-2 bg-pink-600 text-white rounded">{{ page_obj.number }} of {{ page_obj.num_pages}}</span>
 
       {% if page_obj.has_next %}
       <a href="?{% if request.GET %}{{ request.GET.urlencode|cut:'page=' }}&{% endif %}page={{ page_obj.next_page_number }}"
@@ -105,6 +105,23 @@
 
 <!-- ✅ AJAX Scripts -->
 <script>
+  function updateCartCount(count) {
+    const el = document.getElementById("cart-count");
+    if (el) {
+      el.innerText = count;
+      if (count > 0) el.classList.remove("hidden");
+      else el.classList.add("hidden");
+    }
+  }
+  function updateWishlistCount(count) {
+    const el = document.getElementById("wish-count");
+    if (el) {
+      el.innerText = count;
+      if (count > 0) el.classList.remove("hidden");
+      else el.classList.add("hidden");
+    }
+  }
+
   document.addEventListener("DOMContentLoaded", function () {
     const csrfToken = "{{ csrf_token }}";
 
@@ -124,7 +141,7 @@
           .then(res => res.json())
           .then(data => {
             if (data.status === 'success') {
-              document.getElementById("cart-count").innerText = data.cart_count;
+              updateCartCount(data.cart_count);
               showToast("Item added to cart!");
             } else {
               showToast(data.message || "Failed to add.");
@@ -150,6 +167,8 @@
           .then(res => res.json())
           .then(data => {
             if (data.status === "added") {
+              updateWishlistCount(data.wishlist_count);
+
               showToast("Added to wishlist!");
             } else {
               showToast("Already in wishlist.");
