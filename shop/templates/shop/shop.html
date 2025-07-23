@@ -42,7 +42,6 @@
       </div>
     </form>
 
-    <!-- 🛍️ Products Grid -->
     {% if page_obj %}
     <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
       {% for product in page_obj %}
@@ -63,15 +62,29 @@
 
         <div class="p-4">
           <h2 class="text-lg font-semibold text-gray-800">{{ product.name }}</h2>
-          <p class="text-pink-600 font-bold mt-2">₹{{ product.price }}</p>
+
+          {% with offer=product.get_active_offer %}
+          {% if offer.1 > 0 %}
+          <span class="inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded">
+            {{ offer.1 }}% OFF - {{ offer.0 }}
+          </span>
+          <div class="mt-1 flex items-baseline gap-2">
+            <span class="text-pink-600 text-lg font-bold">₹{{ product.get_offer_price|floatformat:0 }}</span>
+            <span class="text-gray-500 line-through text-sm">₹{{ product.price|floatformat:0 }}</span>
+          </div>
+          {% else %}
+          <p class="text-pink-600 font-bold mt-2 text-lg">₹{{ product.price|floatformat:0 }}</p>
+          {% endif %}
+          {% endwith %}
+
           <p class="text-gray-500 text-sm mt-1 truncate">{{ product.description }}</p>
-          <div class="flex gap-2 mt-2">
+
+          <div class="flex gap-2 mt-3">
             <button class="wishlist-btn bg-pink-100 text-pink-600 px-3 py-1 rounded hover:bg-pink-200"
               data-product-id="{{ product.id }}">
               ❤️ Wishlist
             </button>
             {% if product.stock != 0 %}
-
             <button class="add-to-cart-btn bg-green-600 text-white px-3 py-1 rounded"
               data-product-id="{{ product.id }}">
               🛒 Add to Cart

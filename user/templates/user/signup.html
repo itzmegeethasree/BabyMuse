@@ -2,63 +2,109 @@
 {% load static %}
 
 {% block content %}
-<div class="min-h-screen flex items-center justify-center bg-gray-100">
-    <div class="bg-white p-8 rounded-2xl shadow-md w-full max-w-md">
-        <h2 class="text-2xl font-bold text-center mb-6">Create Your BabyMuse Account</h2>
-        <form method="POST" action="">
+<div class="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div class="max-w-xl w-full bg-white p-8 shadow-md rounded-lg">
+        <h2 class="text-2xl font-bold text-center mb-6">Create an Account</h2>
+        <form method="POST" novalidate>
             {% csrf_token %}
+
+            <!-- Username -->
             <div class="mb-4">
-                <label for="firstname" class="block text-sm font-medium text-gray-700">Firstname</label>
-                <input type="text" name="firstname" id="firstname" required
-                    class="mt-1 block w-full border border-gray-300 rounded-xl p-2 focus:ring-green-500 focus:border-green-500">
+                <label for="id_username" class="block text-sm font-medium text-gray-700">Username</label>
+                <input type="text" name="username" id="id_username" value="{{ form.username.value|default:'' }}"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-pink-500 focus:border-pink-500 sm:text-sm">
+                {% if form.username.errors %}
+                <p class="text-sm text-red-600 mt-1">{{ form.username.errors.0 }}</p>
+                {% endif %}
             </div>
+
+            <!-- First Name -->
             <div class="mb-4">
-                <label for="lastname" class="block text-sm font-medium text-gray-700">Lastname</label>
-                <input type="text" name="lastname" id="lastname"
-                    class="mt-1 block w-full border border-gray-300 rounded-xl p-2 focus:ring-green-500 focus:border-green-500">
+                <label for="id_firstname" class="block text-sm font-medium text-gray-700">First Name</label>
+                <input type="text" name="firstname" id="id_firstname" value="{{ form.firstname.value|default:'' }}"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-pink-500 focus:border-pink-500 sm:text-sm">
+                {% if form.firstname.errors %}
+                <p class="text-sm text-red-600 mt-1">{{ form.firstname.errors.0 }}</p>
+                {% endif %}
             </div>
+
+            <!-- Last Name -->
             <div class="mb-4">
-                <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
-                <input type="text" name="username" id="username" required
-                    class="mt-1 block w-full border border-gray-300 rounded-xl p-2 focus:ring-green-500 focus:border-green-500">
+                <label for="id_lastname" class="block text-sm font-medium text-gray-700">Last Name</label>
+                <input type="text" name="lastname" id="id_lastname" value="{{ form.lastname.value|default:'' }}"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-pink-500 focus:border-pink-500 sm:text-sm">
+                {% if form.lastname.errors %}
+                <p class="text-sm text-red-600 mt-1">{{ form.lastname.errors.0 }}</p>
+                {% endif %}
             </div>
 
-
-
-            <div class="relative mb-4">
-                <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
-                <input type="password" name="password" id="password" required
-                    class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm">
-                <button type="button" onclick="togglePassword('password', this)"
-                    class="absolute right-2 top-8 text-sm text-gray-500 hover:text-green-600">👁</button>
+            <!-- Email -->
+            <div class="mb-4">
+                <label for="id_email" class="block text-sm font-medium text-gray-700">Email</label>
+                <input type="email" name="email" id="id_email" value="{{ form.email.value|default:'' }}"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-pink-500 focus:border-pink-500 sm:text-sm">
+                {% if form.email.errors %}
+                <p class="text-sm text-red-600 mt-1">{{ form.email.errors.0 }}</p>
+                {% endif %}
             </div>
 
-            <div class="relative mb-4">
-                <label for="confirm_password" class="block text-sm font-medium text-gray-700">Confirm Password</label>
-                <input type="password" name="confirm_password" id="confirm_password" required
-                    class="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 sm:text-sm">
-                <button type="button" onclick="togglePassword('confirm_password', this)"
-                    class="absolute right-2 top-8 text-sm text-gray-500 hover:text-green-600">👁</button>
+            <!-- Phone -->
+            <div class="mb-4">
+                <label for="id_phone" class="block text-sm font-medium text-gray-700">Phone Number</label>
+                <input type="text" name="phone" id="id_phone" value="{{ form.phone.value|default:'' }}"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-pink-500 focus:border-pink-500 sm:text-sm">
+                {% if form.phone.errors %}
+                <p class="text-sm text-red-600 mt-1">{{ form.phone.errors.0 }}</p>
+                {% endif %}
             </div>
 
-            <button type="submit"
-                class="w-full bg-green-600 text-white py-2 rounded-xl font-semibold hover:bg-green-700 transition">
-                Create Account
-            </button>
+            <!-- Referral Code -->
+            <div class="mb-4">
+                <label for="id_referral_code" class="block text-sm font-medium text-gray-700">Referral Code
+                    (Optional)</label>
+                <input type="text" name="referral_code" id="id_referral_code"
+                    value="{{ form.referral_code.value|default:'' }}"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-pink-500 focus:border-pink-500 sm:text-sm">
+                {% if form.referral_code.errors %}
+                <p class="text-sm text-red-600 mt-1">{{ form.referral_code.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Password -->
+            <div class="mb-4">
+                <label for="id_password1" class="block text-sm font-medium text-gray-700">Password</label>
+                <input type="password" name="password1" id="id_password1"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-pink-500 focus:border-pink-500 sm:text-sm">
+                {% if form.password1.errors %}
+                <p class="text-sm text-red-600 mt-1">{{ form.password1.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Confirm Password -->
+            <div class="mb-6">
+                <label for="id_password2" class="block text-sm font-medium text-gray-700">Confirm Password</label>
+                <input type="password" name="password2" id="id_password2"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:ring-pink-500 focus:border-pink-500 sm:text-sm">
+                {% if form.password2.errors %}
+                <p class="text-sm text-red-600 mt-1">{{ form.password2.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Submit Button -->
+            <div class="text-center">
+                <button type="submit"
+                    class="w-full bg-pink-600 text-white py-2 px-4 rounded hover:bg-pink-700 transition">
+                    Sign Up
+                </button>
+            </div>
+
+            <!-- Global Form Errors -->
+            {% if form.non_field_errors %}
+            <div class="mt-4 text-sm text-red-600 text-center">
+                {{ form.non_field_errors.0 }}
+            </div>
+            {% endif %}
         </form>
     </div>
 </div>
-
-<script>
-    function togglePassword(id, btn) {
-        const input = document.getElementById(id);
-        if (input.type === "password") {
-            input.type = "text";
-            btn.textContent = "🙈";
-        } else {
-            input.type = "password";
-            btn.textContent = "👁";
-        }
-    }
-</script>
 {% endblock %}

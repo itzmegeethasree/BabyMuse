@@ -33,40 +33,64 @@
       {% endif %}
     </div>
 
-    <!-- 🛒 Cart Items -->
     <div class="pt-10">
       <h2 class="text-2xl font-semibold mb-4">🛒 Items in Your Cart</h2>
+
       {% if cart_items %}
-      {% for item in cart_items %}
-      <div class="flex gap-4 border-b py-4">
-        <img src="{{ item.product.image1.url }}" class="w-20 h-20 object-cover rounded" alt="{{ item.product.name }}">
-        <div>
-          <h3 class="font-semibold">{{ item.product.name }}</h3>
-          <p>Qty: {{ item.quantity }}</p>
-          <p>
-            Price: ₹{{ item.product.price }} × {{ item.quantity }} =
-            ₹{{ item.product.price|mul:item.quantity|floatformat:2 }}
-          </p>
-        </div>
+      <div class="overflow-x-auto">
+        <table class="w-full table-auto border border-gray-200 text-sm text-left">
+          <thead class="bg-gray-100 text-gray-700 font-medium">
+            <tr>
+              <th class="p-3">Product</th>
+              <th class="p-3">Qty</th>
+              <th class="p-3">Price</th>
+              <th class="p-3">Subtotal</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y">
+            {% for item in cart_items %}
+            <tr>
+              <td class="p-3 flex items-center gap-3">
+                <img src="{{ item.product.primary_image }}" alt="{{ item.product.name }}"
+                  class="w-20 h-20 object-cover rounded-md">
+                <div>
+                  <div class="font-semibold text-gray-800">{{ item.product.name }}</div>
+                  {% with offer=item.product.get_active_offer %}
+                  {% if offer.1 > 0 %}
+                  <span class="text-xs text-green-700">{{ offer.1 }}% OFF - {{ offer.0 }}</span>
+                  {% endif %}
+                  {% endwith %}
+                </div>
+              </td>
+
+              <td class="p-3">{{ item.quantity }}</td>
+
+              <td class="p-3">
+                {% with offer=item.product.get_active_offer %}
+                {% if offer.1 > 0 %}
+                <div class="text-pink-600 font-semibold">
+                  ₹{{ item.product.get_offer_price|floatformat:0 }}
+                  <span class="text-gray-400 line-through text-xs ml-1">₹{{ item.product.price|floatformat:0 }}</span>
+                </div>
+                {% else %}
+                <div class="text-gray-700">₹{{ item.product.price|floatformat:0 }}</div>
+                {% endif %}
+                {% endwith %}
+              </td>
+
+              <td class="p-3 font-semibold">
+                ₹{{ item.product.get_offer_price|mul:item.quantity|floatformat:2 }}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
-      {% endfor %}
       {% else %}
       <p class="text-gray-500">Your cart is empty.</p>
       {% endif %}
     </div>
 
-    <!-- 💳 Payment Method -->
-    <div class="space-y-4 pt-10">
-      <h2 class="text-2xl font-semibold">💳 Payment Method</h2>
-      <label>
-        <input type="radio" name="payment_method" value="COD" checked>
-        Cash on Delivery
-      </label><br>
-      <label>
-        <input type="radio" name="payment_method" value="RAZORPAY">
-        Razorpay (Online Payment)
-      </label>
-    </div>
 
 
     <!-- 💳 Order Summary + Pay Button -->
@@ -77,14 +101,29 @@
         <p>Tax (5%): ₹{{ tax }}</p>
         <p>Shipping: ₹{{ shipping }}</p>
         {% if applied_coupon %}
-
-        <p class="text-green-700">Coupon Discount ({{ applied_coupon.code }}): -₹{{ discount|floatformat:2 }}</p>
+        <p class="text-green-700" id="discount-row">Coupon Discount ({{ applied_coupon.code }}): -₹{{
+          discount|floatformat:2 }}</p>
         {% endif %}
         <hr>
         <p class="font-bold text-lg">Total: ₹{{ total }}</p>
       </div>
+      <!-- 💳 Payment Method -->
+      <div class="space-y-4 pt-10">
+        <h2 class="text-2xl font-semibold">💳 Payment Method</h2>
+        <label>
+          <input type="radio" name="payment_method" value="COD" checked>
+          Cash on Delivery
+        </label><br>
+        <label>
+          <input type="radio" name="payment_method" value="RAZORPAY">
+          Razorpay (Online Payment)
+        </label>
+      </div>
+
 
       <!-- COD Submit Button -->
+      <input type="hidden" name="place_order" value="true">
+
       <button type="submit" id="cod-submit" class="bg-green-600 text-white px-6 py-2 rounded hover:bg-green-700 w-full">
         💵 Place Order (Cash on Delivery)
       </button>
@@ -96,17 +135,15 @@
       </button>
     </div>
   </form>
-  <div class="space-y-4">
-    {% if not applied_coupon %}
-    <form method="POST" action="{% url 'orders:apply_coupon' %}" class="bg-gray-100 p-4 rounded space-y-4">
-      {% csrf_token %}
-      <h2 class="text-xl font-semibold">🎟️ Apply Coupon</h2>
-      <input type="text" name="coupon_code" class="border p-2 w-full rounded" placeholder="Enter coupon code">
-      <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded w-full">Apply</button>
-    </form>
-    {% endif %}
-  </div>
-
+  <form id="coupon-form" class="mb-6">
+    {% csrf_token %}
+    <input type="text" name="coupon_code" id="coupon_code" placeholder="Enter coupon"
+      class="border px-3 py-2 rounded w-64" />
+    <button type="submit" class="ml-2 bg-blue-600 text-white px-4 py-2 rounded">
+      Apply Coupon
+    </button>
+    <span id="coupon-msg" class="ml-4 text-sm"></span>
+  </form>
 </section>
 
 <!-- Toggle payment buttons -->
@@ -139,6 +176,38 @@
 
     // Submit the form to backend
     document.getElementById('checkout-form').submit();
+  };
+
+  document.getElementById('coupon-form').onsubmit = function (e) {
+    e.preventDefault();
+    const code = document.getElementById('coupon_code').value;
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    fetch("{% url 'orders:ajax_apply_coupon' %}", {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": csrf,
+        "X-Requested-With": "XMLHttpRequest",
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: "coupon_code=" + encodeURIComponent(code)
+    })
+      .then(res => res.json())
+      .then(data => {
+        document.getElementById('coupon-msg').textContent = data.msg;
+        if (data.success) {
+          // Update discount and total in the summary
+          let discountRow = document.getElementById('discount-row');
+          if (!discountRow) {
+            discountRow = document.createElement('p');
+            discountRow.id = 'discount-row';
+            discountRow.className = 'text-green-700';
+            const summary = document.querySelector('.bg-gray-50');
+            summary.insertBefore(discountRow, summary.querySelector('hr'));
+          }
+          discountRow.textContent = `Coupon Discount (${data.coupon_code}): -₹${data.discount}`;
+          document.querySelector('.font-bold.text-lg').textContent = `Total: ₹${data.total}`;
+        }
+      });
   };
 </script>
 {% endblock %}

@@ -25,8 +25,15 @@ urlpatterns = [
 
     path('address/', views.address_book, name='address_book'),
     path('address/add/', views.add_address, name='add_address'),
-    path('address/edit/<int:id>/', views.edit_address, name='edit_address'),
+    path('address/edit/<int:address_id>/',
+         views.edit_address, name='edit_address'),
     path('address/delete/<int:id>/', views.delete_address, name='delete_address'),
+    path('baby-profile/add/', views.add_baby_profile, name='add_baby_profile'),
+    path('baby-profile/<int:pk>/edit/',
+         views.edit_baby_profile, name='edit_baby_profile'),
+    path('baby-profile/<int:pk>/delete/',
+         views.delete_baby_profile, name='delete_baby_profile'),
+
 
 
 

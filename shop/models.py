@@ -1,27 +1,11 @@
-from PIL.Image import Resampling
+from django.conf import settings
 from django.utils.text import slugify
 from django.db import models
-from django.conf import settings
-from django.utils import timezone
 from django.contrib.auth import get_user_model
-from PIL import Image
-import os
-from django.core.files.base import ContentFile
-from io import BytesIO
-from user.models import Address
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 User = get_user_model()
-
-
-ORDER_STATUS = [
-    ('Pending', 'Pending'),
-    ('Processing', 'Processing'),
-    ('Shipped', 'Shipped'),
-    ('Delivered', 'Delivered'),
-    ('Cancelled', 'Cancelled'),
-    ('Paid', 'Paid'),
-]
 
 
 class Category(models.Model):
@@ -38,6 +22,7 @@ class Category(models.Model):
     is_active = models.BooleanField(default=True)
     is_deleted = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    offer_percentage = models.PositiveIntegerField(default=0)
 
     class Meta:
         verbose_name_plural = "Categories"
@@ -59,12 +44,40 @@ class Product(models.Model):
     category = models.ForeignKey(
         Category, on_delete=models.SET_NULL, null=True)
     description = models.TextField(default='No description provided')
+    min_age = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Minimum age in months (0-36)")
+    max_age = models.PositiveIntegerField(
+        null=True, blank=True, help_text="Maximum age in months (0-36)")
+    gender = models.CharField(
+        max_length=10,
+        choices=[('Male', 'Male'), ('Female', 'Female'), ('Unisex', 'Unisex')],
+        default='Unisex'
+    )
+    brand = models.ForeignKey(
+        'Brand', on_delete=models.SET_NULL, null=True, blank=True)
+
     price = models.DecimalField(max_digits=10, decimal_places=2)
     stock = models.PositiveIntegerField()
     status = models.CharField(max_length=20, choices=[(
         'Active', 'Active'), ('Inactive', 'Inactive')], default='Active')
     created_at = models.DateTimeField(auto_now_add=True)
     is_deleted = models.BooleanField(default=False)
+    product_offer_percentage = models.PositiveIntegerField(
+        default=0)
+    views = models.PositiveIntegerField(default=0)
+
+    def get_offer_price(self):
+        product_offer = self.product_offer_percentage
+        category_offer = self.category.offer_percentage if self.category else 0
+        best_offer = max(product_offer, category_offer)
+        return self.price - (self.price * best_offer / 100)
+
+    def get_active_offer(self):
+        product_offer = self.product_offer_percentage
+        category_offer = self.category.offer_percentage if self.category else 0
+        if product_offer >= category_offer:
+            return ('Product Offer', product_offer)
+        return ('Category Offer', category_offer)
 
     def __str__(self):
         return self.name
@@ -84,50 +97,47 @@ class ProductImage(models.Model):
         # Save original first to get file path
         super().save(*args, **kwargs)
 
-        # Open the uploaded image
-        img_path = self.image.path
-        img = Image.open(img_path)
 
-        # Crop and resize
-        desired_size = (600, 600)
-        img = self.crop_center(img)
-        img = img.resize(desired_size, Resampling.LANCZOS)  # FIXED here
-
-        # Save it back to the same file
-        img.save(img_path)
-
-    def crop_center(self, img):
-        width, height = img.size
-        new_edge = min(width, height)
-        left = (width - new_edge) // 2
-        top = (height - new_edge) // 2
-        right = (width + new_edge) // 2
-        bottom = (height + new_edge) // 2
-        return img.crop((left, top, right, bottom))
-
-
-class Order(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL,
-                             on_delete=models.CASCADE)
-    created_at = models.DateTimeField(auto_now_add=True)
-    status = models.CharField(
-        max_length=50, choices=ORDER_STATUS, default='Pending')
-    total_price = models.DecimalField(
-        max_digits=10, decimal_places=2, default=0)
-    address = models.ForeignKey(Address, on_delete=models.CASCADE, null=True)
-    payment_method = models.CharField(max_length=20, default='COD')
-    razorpay_order_id = models.CharField(max_length=100, blank=True, null=True)
-    is_paid = models.BooleanField(default=False)
+class VariantAttribute(models.Model):
+    name = models.CharField(max_length=50, unique=True)
 
     def __str__(self):
-        return f"Order #{self.id} - {self.user.username}"
+        return self.name
 
 
-class OrderItem(models.Model):
-    order = models.ForeignKey(Order, on_delete=models.CASCADE)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.PositiveIntegerField()
+class VariantOption(models.Model):
+    attribute = models.ForeignKey(
+        VariantAttribute, on_delete=models.CASCADE, related_name='options')
+    value = models.CharField(max_length=50)
+
+    class Meta:
+        unique_together = ('attribute', 'value')
+
+    def __str__(self):
+        return f"{self.attribute.name}: {self.value}"
+
+
+class ProductVariant(models.Model):
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name='variants')
+    options = models.ManyToManyField(VariantOption)
+    sku = models.CharField(max_length=100, unique=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
+    stock = models.PositiveIntegerField(default=0)
+    image = models.ImageField(
+        upload_to='variant_images/', blank=True, null=True)
+
+    class Meta:
+        unique_together = ('product', 'sku')
+
+    def __str__(self):
+        return f"{self.product.name} - {', '.join([opt.value for opt in self.options.all()])}"
+
+    def get_offer_price(self):
+        product_offer = self.product.product_offer_percentage
+        category_offer = self.product.category.offer_percentage if self.product.category else 0
+        best_offer = max(product_offer, category_offer)
+        return self.price - (self.price * best_offer / 100)
 
 
 class Wishlist(models.Model):
@@ -148,18 +158,19 @@ class Wishlist(models.Model):
 class CartItem(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL,
                              on_delete=models.CASCADE, related_name='cart_items')
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    product_variant = models.ForeignKey(
+        ProductVariant, on_delete=models.CASCADE)
     quantity = models.PositiveIntegerField(default=1)
     added_at = models.DateTimeField(auto_now_add=True)
 
     def subtotal(self):
-        return self.quantity * self.product.price
+        return self.quantity * self.product_variant.get_offer_price()
 
     def __str__(self):
-        return f"{self.quantity} x {self.product.name} ({self.user.email})"
+        return f"{self.quantity} x {self.product_variant} ({self.user.email})"
 
     class Meta:
-        unique_together = ('user', 'product')
+        unique_together = ('user', 'product_variant')
         ordering = ['-added_at']
 
 
@@ -167,13 +178,16 @@ class Review(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE)
     user = models.ForeignKey(settings.AUTH_USER_MODEL,
                              on_delete=models.CASCADE)
-    rating = models.IntegerField(default=5)
     comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    rating = models.IntegerField(default=5, validators=[
+                                 MinValueValidator(1), MaxValueValidator(5)])
 
 
-class ReturnRequest(models.Model):
-    order = models.ForeignKey(Order, on_delete=models.CASCADE)
-    reason = models.TextField()
+class Brand(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    approved = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name

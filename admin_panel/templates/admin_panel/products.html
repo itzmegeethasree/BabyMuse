@@ -27,6 +27,8 @@
         <th class="p-2">Price</th>
         <th class="p-2">Stock</th>
         <th class="p-2">Status</th>
+        <th class="p-2">Age Range</th>
+        <th class="p-2">Gender</th>
         <th class="p-2">Actions</th>
       </tr>
     </thead>
@@ -47,6 +49,8 @@
           <span class="text-green-600 font-semibold">Listed</span>
           {% endif %}
         </td>
+        <td class="p-2">{{ product.min_age }} - {{ product.max_age }} mo</td>
+        <td class="p-2">{{ product.gender }}</td>
         <td class="p-2 space-x-2">
           <a href="{% url 'admin_panel:admin_edit_product' product.id %}" class="text-blue-600 hover:underline">Edit</a>
           |
@@ -58,7 +62,7 @@
       </tr>
       {% empty %}
       <tr>
-        <td colspan="7" class="text-center p-4 text-gray-500">No products found.</td>
+        <td colspan="9" class="text-center p-4 text-gray-500">No products found.</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -85,4 +89,30 @@
     </nav>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+  // Client-side search filtering
+  document.addEventListener('DOMContentLoaded', function () {
+    const searchInput = document.querySelector('input[name="search"]');
+    const productRows = document.querySelectorAll('tbody tr');
+
+    searchInput.addEventListener('input', function () {
+      const searchTerm = this.value.toLowerCase().trim();
+
+      productRows.forEach(function (row) {
+        const productName = row.children[1].textContent.toLowerCase();
+        const categoryName = row.children[2].textContent.toLowerCase();
+        const gender = row.children[7].textContent.toLowerCase();
+
+        if (productName.includes(searchTerm) || categoryName.includes(searchTerm) || gender.includes(searchTerm)) {
+          row.style.display = '';
+        } else {
+          row.style.display = 'none';
+        }
+      });
+    });
+  });
+</script>
 {% endblock %}

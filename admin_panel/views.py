@@ -1,25 +1,37 @@
-from shop.models import ORDER_STATUS, Product, Order, Category, ProductImage, OrderItem, ReturnRequest
+from django.contrib.auth import get_user_model
 from .models import AdminUser
+from django.contrib.auth.hashers import check_password, make_password
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-from django.contrib.auth.hashers import check_password, make_password
-from django.core.mail import send_mail
-from django.conf import settings
-from django.core.paginator import Paginator
-from django.http import HttpResponse
-from django.db.models import Sum, Q
-from django.contrib.auth import get_user_model
-from .forms import ProductForm
-from shop.forms import CategoryForm
-from .decorators import admin_login_required
-from io import BytesIO
-from django.core.files.base import ContentFile
-from PIL import Image
 import random
 import string
-import csv
-from django.core.exceptions import ObjectDoesNotExist
+from django.core.mail import send_mail
+from django.conf import settings
+from .decorators import admin_login_required
 from django.views.decorators.http import require_POST
+
+
+# from orders.models import Order, ORDER_STATUS, OrderItem, ReturnRequest
+# from django.shortcuts import redirect, get_object_or_404
+# import xlsxwriter
+# from django.contrib.admin.views.decorators import staff_member_required
+# from django.template.loader import render_to_string
+# from django.utils.dateparse import parse_date
+# from django.http import HttpResponse, FileResponse
+# from shop.models import Product, Category, ProductImage
+# from django.core.paginator import Paginator
+# from django.http import HttpResponse
+# from django.db.models import Sum, Q
+# from .forms import ProductForm, CouponForm
+# from shop.forms import CategoryForm, CategoryOfferForm, ProductOfferForm
+# from io import BytesIO
+# from django.core.files.base import ContentFile
+# from PIL import Image
+# import csv
+# from django.core.exceptions import ObjectDoesNotExist
+# from orders.models import Coupon
+# from reportlab.lib.pagesizes import A4
+# from reportlab.pdfgen import canvas
 
 
 User = get_user_model()
@@ -33,6 +45,8 @@ if not AdminUser.objects.filter(username='admin123').exists():
 else:
     print("Admin user already exists.")
 
+# login
+
 
 def custom_admin_login(request):
     if request.method == "POST":
@@ -42,7 +56,7 @@ def custom_admin_login(request):
         try:
             admin = AdminUser.objects.get(username=username)
             if check_password(password, admin.password):
-                request.session['admin_id'] = admin.id  # ✅ Session set
+                request.session['admin_id'] = admin.id
                 return redirect('admin_panel:admin_dashboard')
             else:
                 messages.error(request, "Incorrect password")
@@ -83,17 +97,17 @@ def admin_forgot_password(request):
 @admin_login_required
 def admin_dashboard(request):
     total_users = User.objects.count()
-    total_products = Product.objects.count()
-    total_orders = Order.objects.count()
-    total_revenue = Order.objects.filter(status="paid").aggregate(
-        total=Sum('total_price'))['total'] or 0
-    latest_orders = Order.objects.order_by('-created_at')[:5]
+    # total_products = Product.objects.count()
+    # total_orders = Order.objects.count()
+    # total_revenue = Order.objects.filter(status="paid").aggregate(
+    #     total=Sum('total_price'))['total'] or 0
+    # latest_orders = Order.objects.order_by('-created_at')[:5]
     return render(request, 'admin_panel/dashboard.html', {
         'total_users': total_users,
-        'total_products': total_products,
-        'total_orders': total_orders,
-        'total_revenue': total_revenue,
-        'latest_orders': latest_orders,
+        # 'total_products': total_products,
+        # 'total_orders': total_orders,
+        # 'total_revenue': total_revenue,
+        # 'latest_orders': latest_orders,
     })
 
 
@@ -180,6 +194,9 @@ def admin_orders(request):
     })
 
 
+ORDER_FLOW = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Completed']
+
+
 @admin_login_required
 def admin_order_detail(request, order_id):
     order = get_object_or_404(Order, id=order_id)
@@ -188,6 +205,7 @@ def admin_order_detail(request, order_id):
         'order': order,
         'order_items': order_items,
         'status_choices': ORDER_STATUS,
+        'order_flow': ORDER_FLOW,
 
     }
     return render(request, 'admin_panel/order_details.html', context)
@@ -207,7 +225,20 @@ def change_order_status(request, order_id):
     order = get_object_or_404(Order, id=order_id)
     new_status = request.POST.get('status')
 
-    if new_status in dict(ORDER_STATUS).keys():
+    valid_choices = dict(ORDER_STATUS).keys()
+
+    if new_status in valid_choices:
+        # Allow special transitions like Cancelled, Failed, etc.
+        if order.status in ORDER_FLOW and new_status in ORDER_FLOW:
+            current_index = ORDER_FLOW.index(order.status)
+            new_index = ORDER_FLOW.index(new_status)
+
+            if new_index < current_index:
+                messages.warning(
+                    request, "You can't move the status backward.")
+                return redirect('admin_panel:admin_order_detail', order_id=order.id)
+
+        # Restock if cancelled
         if order.status != 'Cancelled' and new_status == 'Cancelled':
             for item in order.orderitem_set.all():
                 item.product.stock += item.quantity
@@ -217,6 +248,10 @@ def change_order_status(request, order_id):
         order.save()
         messages.success(
             request, f"Order #{order.id} status updated to {new_status}")
+
+    else:
+        messages.error(request, "Invalid status selected.")
+
     return redirect('admin_panel:admin_order_detail', order_id=order.id)
 
 
@@ -260,15 +295,16 @@ def admin_return_requests(request):
 
 @admin_login_required
 def admin_products(request):
-    search_query = request.GET.get('search', '')
+    search_query = request.GET.get('search', '').strip()
     category_id = request.GET.get('category', '')
 
-    products = Product.objects.all().select_related(
-        'category').order_by('-created_at')
-
-   # Apply search filter
+    products = Product.objects.all()
     if search_query:
-        products = products.filter(name__icontains=search_query)
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(category__name__icontains=search_query) |
+            Q(gender__icontains=search_query)
+        )
 
     # Apply category filter
     if category_id:
@@ -297,30 +333,49 @@ def admin_add_product(request):
     categories = Category.objects.filter(is_deleted=False)
 
     if request.method == 'POST':
-        name = request.POST.get('name')
+        name = request.POST.get('name', '').strip()
         category_id = request.POST.get('category')
-        description = request.POST.get('description')
+        description = request.POST.get('description', '').strip()
         price = request.POST.get('price')
         stock = request.POST.get('stock')
-        status = request.POST.get('status')
+        status = request.POST.get('status', 'Active')
+        min_age = request.POST.get('min_age')
+        max_age = request.POST.get('max_age')
+        gender = request.POST.get('gender', 'Unisex')
         images = request.FILES.getlist('images')
 
-        if not all([name, category_id, description, price, stock, status]):
-            messages.error(request, "Please fill out all required fields.")
-            return render(request, 'admin_panel/add_product.html', {
-                'categories': categories
-            })
-
+        # Validation
+        errors = []
+        if not name:
+            errors.append("Product name is required.")
+        if not category_id:
+            errors.append("Category is required.")
+        if not description:
+            errors.append("Description is required.")
+        if not price or not price.replace('.', '', 1).isdigit() or float(price) < 0:
+            errors.append("Valid price is required.")
+        if not stock or not stock.isdigit() or int(stock) < 0:
+            errors.append("Valid stock is required.")
+        if min_age and (not min_age.isdigit() or not (0 <= int(min_age) <= 36)):
+            errors.append("Min age must be between 0 and 36 months.")
+        if max_age and (not max_age.isdigit() or not (0 <= int(max_age) <= 36)):
+            errors.append("Max age must be between 0 and 36 months.")
+        if min_age and max_age and int(min_age) > int(max_age):
+            errors.append("Min age cannot be greater than max age.")
+        if gender not in ['Male', 'Female', 'Unisex']:
+            errors.append("Invalid gender selected.")
         if len(images) != 3:
-            messages.error(request, "Please upload exactly 3 images.")
-            return render(request, 'admin_panel/add_product.html', {
-                'categories': categories
-            })
+            errors.append("Please upload exactly 3 cropped images.")
 
+        # Check category exists
         try:
             category = Category.objects.get(id=category_id)
-        except ObjectDoesNotExist:
-            messages.error(request, "Invalid category selected.")
+        except (Category.DoesNotExist, ValueError, TypeError):
+            errors.append("Invalid category selected.")
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
             return render(request, 'admin_panel/add_product.html', {
                 'categories': categories
             })
@@ -333,9 +388,12 @@ def admin_add_product(request):
             price=price,
             stock=stock,
             status=status,
+            min_age=min_age or None,
+            max_age=max_age or None,
+            gender=gender,
         )
 
-        #  Save product images
+        # Save product images
         for image_file in images:
             ProductImage.objects.create(product=product, image=image_file)
 
@@ -366,28 +424,78 @@ def process_image(image_file):
 @admin_login_required
 def admin_edit_product(request, product_id):
     product = get_object_or_404(Product, id=product_id)
+    categories = Category.objects.filter(is_deleted=False)
 
     if request.method == 'POST':
-        form = ProductForm(request.POST, request.FILES, instance=product)
-        if form.is_valid():
-            form.save()
-            images = request.FILES.getlist('images')
-            if images:
-                for img in images:
-                    processed = process_image(img)
-                    if processed:
-                        ProductImage.objects.create(
-                            product=product, image=processed)
-            messages.success(request, "Product updated successfully.")
-            return redirect('admin_panel:admin_products')
-    else:
-        form = ProductForm(instance=product)
+        name = request.POST.get('name', '').strip()
+        category_id = request.POST.get('category')
+        description = request.POST.get('description', '').strip()
+        price = request.POST.get('price')
+        stock = request.POST.get('stock')
+        status = request.POST.get('status', 'Active')
+        min_age = request.POST.get('min_age')
+        max_age = request.POST.get('max_age')
+        gender = request.POST.get('gender', 'Unisex')
+        images = request.FILES.getlist('images')
 
-    categories = Category.objects.filter(
-        parent__isnull=True, is_deleted=False).prefetch_related('subcategories')
+        errors = []
+        if not name:
+            errors.append("Product name is required.")
+        if not category_id:
+            errors.append("Category is required.")
+        if not description:
+            errors.append("Description is required.")
+        if not price or not price.replace('.', '', 1).isdigit() or float(price) < 0:
+            errors.append("Valid price is required.")
+        if not stock or not stock.isdigit() or int(stock) < 0:
+            errors.append("Valid stock is required.")
+        if min_age and (not min_age.isdigit() or not (0 <= int(min_age) <= 36)):
+            errors.append("Min age must be between 0 and 36 months.")
+        if max_age and (not max_age.isdigit() or not (0 <= int(max_age) <= 36)):
+            errors.append("Max age must be between 0 and 36 months.")
+        if min_age and max_age and int(min_age) > int(max_age):
+            errors.append("Min age cannot be greater than max age.")
+        if gender not in ['Male', 'Female', 'Unisex']:
+            errors.append("Invalid gender selected.")
+        if images and len(images) != 3:
+            errors.append(
+                "If uploading new images, you must upload exactly 3 cropped images.")
+
+        try:
+            category = Category.objects.get(id=category_id)
+        except (Category.DoesNotExist, ValueError, TypeError):
+            errors.append("Invalid category selected.")
+
+        if errors:
+            for error in errors:
+                messages.error(request, error)
+            return render(request, 'admin_panel/edit_product.html', {
+                'product': product,
+                'categories': categories
+            })
+
+        # Update product fields
+        product.name = name
+        product.category = category
+        product.description = description
+        product.price = price
+        product.stock = stock
+        product.status = status
+        product.min_age = min_age or None
+        product.max_age = max_age or None
+        product.gender = gender
+        product.save()
+
+        # If new images uploaded, replace old images
+        if images:
+            product.images.all().delete()
+            for image_file in images:
+                ProductImage.objects.create(product=product, image=image_file)
+
+        messages.success(request, "Product updated successfully!")
+        return redirect('admin_panel:admin_products')
 
     return render(request, 'admin_panel/edit_product.html', {
-        'form': form,
         'product': product,
         'categories': categories
     })
@@ -488,3 +596,199 @@ def toggle_user_status(request, user_id):
     status = "unblocked" if user.is_active else "blocked"
     messages.success(request, f"User {user.username} has been {status}.")
     return redirect('admin_panel:admin_customer_list')
+# coupon management
+
+
+def coupon_list(request):
+    query = request.GET.get('q')
+    coupons = Coupon.objects.filter(is_deleted=False)
+
+    if query:
+        coupons = coupons.filter(Q(code__icontains=query))
+
+    coupons = coupons.order_by('-created_at')
+    paginator = Paginator(coupons, 10)
+    page = request.GET.get('page')
+    coupons = paginator.get_page(page)
+
+    return render(request, 'admin_panel/coupon_list.html', {'coupons': coupons})
+
+
+def coupon_create(request):
+    if request.method == 'POST':
+        form = CouponForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Coupon created successfully.")
+            return redirect('admin_panel:admin-coupon-list')
+    else:
+        form = CouponForm()
+
+    return render(request, 'admin_panel/coupon_form.html', {'form': form})
+
+
+def coupon_edit(request, coupon_id):
+    coupon = get_object_or_404(Coupon, id=coupon_id)
+    if request.method == 'POST':
+        form = CouponForm(request.POST, instance=coupon)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Coupon updated successfully.")
+            return redirect('admin_panel:admin-coupon-list')
+    else:
+        form = CouponForm(instance=coupon)
+
+    return render(request, 'admin_panel/coupon_form.html', {'form': form})
+
+
+def coupon_delete(request, coupon_id):
+    coupon = get_object_or_404(Coupon, id=coupon_id)
+    coupon.is_deleted = True
+    coupon.save()
+    messages.warning(request, "Coupon deleted (soft delete).")
+    return redirect('admin_panel:admin-coupon-list')
+# offer management
+
+
+def product_offer_list(request):
+    products = Product.objects.filter(
+        is_deleted=False)
+    return render(request, 'admin_panel/product_offer_list.html', {'products': products})
+
+
+def update_product_offer(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    if request.method == 'POST':
+        form = ProductOfferForm(request.POST, instance=product)
+        if form.is_valid():
+            form.save()
+            return redirect('admin_panel:product_offer_list')
+    else:
+        form = ProductOfferForm(instance=product)
+    return render(request, 'admin_panel/update_product_offer.html', {'form': form})
+
+
+def category_offer_list(request):
+    categories = Category.objects.all()
+    return render(request, 'admin_panel/category_offer_list.html', {'categories': categories})
+
+
+def update_category_offer(request, category_id):
+    category = get_object_or_404(Category, id=category_id)
+    if request.method == 'POST':
+        form = CategoryOfferForm(request.POST, instance=category)
+        if form.is_valid():
+            form.save()
+            return redirect('admin_panel:category_offer_list')
+    else:
+        form = CategoryOfferForm(instance=category)
+    return render(request, 'admin_panel/update_category_offer.html', {'form': form})
+
+# reports
+
+
+@admin_login_required
+def sales_report_view(request):
+    from_date = request.GET.get('from')
+    to_date = request.GET.get('to')
+    orders = Order.objects.filter(status='Delivered')
+
+    if from_date and to_date:
+        from_date = parse_date(from_date)
+        to_date = parse_date(to_date)
+        orders = orders.filter(created_at__date__range=(from_date, to_date))
+
+    total_orders = Order.objects.filter(status='Delivered').count()
+    total_price = orders.aggregate(Sum('total_price'))['total_price__sum'] or 0
+    total_discount = orders.aggregate(Sum('discount_amount'))[
+        'discount_amount__sum'] or 0
+
+    context = {
+        'orders': orders,
+        'total_orders': total_orders,
+        'total_price': total_price,
+        'total_discount': total_discount,
+        'from': request.GET.get('from', ''),
+        'to': request.GET.get('to', ''),
+    }
+    return render(request, 'admin_panel/sales_report.html', context)
+
+
+@admin_login_required
+def download_sales_report_pdf(request):
+    from_date = request.GET.get('from')
+    to_date = request.GET.get('to')
+
+    orders = Order.objects.filter(status='Delivered')
+    if from_date and to_date:
+        from_date = parse_date(from_date)
+        to_date = parse_date(to_date)
+        orders = orders.filter(created_at__date__range=(from_date, to_date))
+
+    # PDF setup
+    buffer = BytesIO()
+    p = canvas.Canvas(buffer, pagesize=A4)
+    width, height = A4
+    y = height - 50
+
+    p.setFont("Helvetica-Bold", 16)
+    p.drawString(50, y, "📄 BabyMuse Sales Report")
+    y -= 30
+
+    p.setFont("Helvetica", 12)
+    p.drawString(50, y, f"From: {from_date}   To: {to_date}")
+    y -= 30
+
+    p.drawString(
+        50, y, "Order ID | Customer | Date | Total ₹ | Discount ₹ | Payment")
+    y -= 20
+    p.line(50, y, width - 50, y)
+    y -= 20
+
+    for order in orders:
+        if y < 100:
+            p.showPage()
+            y = height - 50
+
+        p.drawString(
+            50, y, f"{order.id} | {order.user.username} | {order.created_at.date()} | ₹{order.total_price} | ₹{order.discount_amount} | {order.payment_method}")
+        y -= 20
+
+    p.showPage()
+    p.save()
+    buffer.seek(0)
+
+    return FileResponse(buffer, as_attachment=True, filename="sales_report.pdf")
+
+
+@admin_login_required
+def download_sales_report_excel(request):
+    from_date = request.GET.get('from')
+    to_date = request.GET.get('to')
+    orders = Order.objects.filter(status='Delivered')
+
+    if from_date and to_date:
+        from_date = parse_date(from_date)
+        to_date = parse_date(to_date)
+        orders = orders.filter(created_at__date__range=(from_date, to_date))
+
+    output = BytesIO()
+    workbook = xlsxwriter.Workbook(output)
+    worksheet = workbook.add_worksheet("Sales Report")
+
+    headers = ['Order ID', 'Customer', 'Date',
+               'Total Amount', 'Discount', 'Payment Method']
+    for col, header in enumerate(headers):
+        worksheet.write(0, col, header)
+
+    for row, order in enumerate(orders, start=1):
+        worksheet.write(row, 0, order.id)
+        worksheet.write(row, 1, order.user.username)
+        worksheet.write(row, 2, order.created_at.strftime('%Y-%m-%d'))
+        worksheet.write(row, 3, float(order.total_price))
+        worksheet.write(row, 4, float(order.discount_amount))
+        worksheet.write(row, 5, order.payment_method)
+
+    workbook.close()
+    output.seek(0)
+    return FileResponse(output, as_attachment=True, filename='sales_report.xlsx')

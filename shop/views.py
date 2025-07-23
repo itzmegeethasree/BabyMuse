@@ -147,7 +147,7 @@ def ajax_add_to_cart(request):
             return JsonResponse({'status': 'error', 'message': 'Stock limit reached'})
         cart_item.quantity += 1
         cart_item.save()
-
+    
     cart_count = CartItem.objects.filter(user=request.user).count()
     return JsonResponse({'status': 'success', 'cart_count': cart_count})
 

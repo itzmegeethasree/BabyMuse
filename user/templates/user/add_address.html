@@ -2,59 +2,80 @@
 {% block content %}
 <section class="max-w-xl mx-auto py-10">
     <h2 class="text-2xl font-semibold mb-4">{{ title }}</h2>
+    <a href="{% url 'user:address_book' %}" class="text-blue-600 underline">← Back </a>
 
     <form method="POST" class="bg-white p-6 rounded shadow space-y-4">
         {% csrf_token %}
+
         <label class="block">
             Name
-            <input type="text" name="name" value="{{ address.name|default:'' }}" required
+            <input type="text" name="name" value="{{ form.name.value|default:'' }}" required
                 class="w-full border rounded px-3 py-2" />
+            {% if form.name.errors %}
+            <p class="text-red-500 text-sm">{{ form.name.errors.0 }}</p>
+            {% endif %}
         </label>
 
         <label class="block">
             Phone
-            <input type="text" name="phone" value="{{ address.phone|default:'' }}" required
+            <input type="text" name="phone" value="{{ form.phone.value|default:'' }}" required
                 class="w-full border rounded px-3 py-2" />
+            {% if form.phone.errors %}
+            <p class="text-red-500 text-sm">{{ form.phone.errors.0 }}</p>
+            {% endif %}
         </label>
 
         <label class="block">
             Address Line 1
             <textarea name="address_line1" required
-                class="w-full border rounded px-3 py-2">{{ address.address_line1|default:'' }}</textarea>
+                class="w-full border rounded px-3 py-2">{{ form.address_line1.value|default:'' }}</textarea>
+            {% if form.address_line1.errors %}
+            <p class="text-red-500 text-sm">{{ form.address_line1.errors.0 }}</p>
+            {% endif %}
         </label>
 
         <label class="block">
             Address Line 2 (Optional)
-            <input type="text" name="address_line2" value="{{ address.address_line2|default:'' }}"
+            <input type="text" name="address_line2" value="{{ form.address_line2.value|default:'' }}"
                 class="w-full border rounded px-3 py-2" />
         </label>
 
         <label class="block">
             City
-            <input type="text" name="city" value="{{ address.city|default:'' }}" required
+            <input type="text" name="city" value="{{ form.city.value|default:'' }}" required
                 class="w-full border rounded px-3 py-2" />
+            {% if form.city.errors %}
+            <p class="text-red-500 text-sm">{{ form.city.errors.0 }}</p>
+            {% endif %}
         </label>
 
         <label class="block">
             State
-            <input type="text" name="state" value="{{ address.state|default:'' }}" required
+            <input type="text" name="state" value="{{ form.state.value|default:'' }}" required
                 class="w-full border rounded px-3 py-2" />
+            {% if form.state.errors %}
+            <p class="text-red-500 text-sm">{{ form.state.errors.0 }}</p>
+            {% endif %}
         </label>
 
         <label class="block">
             Postal Code
-            <input type="text" name="postal_code" value="{{ address.postal_code|default:'' }}" required
+            <input type="text" name="postal_code" value="{{ form.postal_code.value|default:'' }}" required
                 class="w-full border rounded px-3 py-2" />
+            {% if form.postal_code.errors %}
+            <p class="text-red-500 text-sm">{{ form.postal_code.errors.0 }}</p>
+            {% endif %}
         </label>
 
         <label class="inline-flex items-center">
-            <input type="checkbox" name="is_default" {% if address.is_default %}checked{% endif %} class="mr-2" />
+            <input type="checkbox" name="is_default" {% if form.is_default.value %}checked{% endif %} class="mr-2" />
             Set as default address
         </label>
 
         <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
             Save Address
         </button>
+
     </form>
 </section>
 {% endblock %}

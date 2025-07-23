@@ -1,17 +1,55 @@
 {% extends 'core/base.html' %}
 {% block content %}
-<section class="max-w-md mx-auto py-12">
-    <h2 class="text-2xl font-semibold mb-4">🔐 Verify Email OTP</h2>
-    <form method="POST" class="bg-white p-6 rounded shadow space-y-4">
-        {% csrf_token %}
-        <label class="block">
-            <span class="text-gray-700">Enter OTP sent to your new email</span>
-            <input type="text" name="otp" maxlength="6" required class="w-full border px-3 py-2 rounded">
-        </label>
+<section class="max-w-xl mx-auto py-12 text-center">
+    <h2 class="text-2xl font-semibold mb-4">🔐 Verify New Email</h2>
+    <p class="mb-4 text-gray-600">We’ve sent an OTP to your new email. Enter it below to verify.</p>
 
-        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-            Verify & Update Email
-        </button>
+    {% if messages %}
+    {% for message in messages %}
+    <p class="text-red-600 mb-2">{{ message }}</p>
+    {% endfor %}
+    {% endif %}
+
+    <form method="POST" class="space-y-4">
+        {% csrf_token %}
+        <input type="text" name="otp" maxlength="6" placeholder="Enter OTP"
+            class="border rounded px-4 py-2 w-full text-center" required />
+
+        <div id="timer" class="text-sm text-gray-500"></div>
+
+        <div class="mt-4">
+            <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Verify</button>
+        </div>
     </form>
+
+    <div class="mt-4">
+        <form method="POST" action="{% url 'user:resend_otp' %}">
+            {% csrf_token %}
+            <button type="submit" id="resendBtn" class="text-sm text-blue-600 hover:underline" disabled>
+                Resend OTP
+            </button>
+        </form>
+    </div>
 </section>
+
+<script>
+    let secondsLeft = {{ remaining_seconds }};
+    const timerEl = document.getElementById('timer');
+    const resendBtn = document.getElementById('resendBtn');
+
+    function updateTimer() {
+        if (secondsLeft <= 0) {
+            timerEl.innerText = "You can now resend the OTP.";
+            resendBtn.disabled = false;
+            return;
+        }
+
+        timerEl.innerText = `Resend available in ${secondsLeft} seconds`;
+        resendBtn.disabled = true;
+        secondsLeft--;
+        setTimeout(updateTimer, 1000);
+    }
+
+    updateTimer();
+</script>
 {% endblock %}

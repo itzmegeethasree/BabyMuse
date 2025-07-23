@@ -1,3 +1,6 @@
+import base64
+from .forms import AddressForm, BabyProfileForm, CustomUserCreationForm, CustomUserUpdateForm
+import uuid
 from django.contrib.auth import login
 from django.shortcuts import get_object_or_404, render, redirect
 from django.contrib.auth import authenticate, login, logout
@@ -7,8 +10,12 @@ import re
 import random
 from django.core.mail import send_mail
 from django.utils import timezone
-from datetime import timedelta
-from .models import Profile, Address
+from django.utils.timezone import now, timedelta
+from datetime import timezone as dt_timezone
+
+
+from orders.models import Coupon
+from .models import Address, BabyProfile
 from django.contrib.auth.decorators import login_required
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.contrib.auth import update_session_auth_hash
@@ -67,34 +74,16 @@ def is_strong_password(password):
 
 def user_register(request):
     if request.method == 'POST':
-        username = request.POST.get('username', '').strip()
         email = request.POST.get('email', '').strip()
-        password = request.POST.get('password', '')
-        confirm_password = request.POST.get('confirm_password', '')
-
-        if not username:
-            messages.error(request, "Username is required.")
-            return redirect('user:user_register')
-
-        if password != confirm_password:
-            messages.error(request, "Passwords do not match.")
-            return redirect('user:user_register')
-
-        if not is_strong_password(password):
-            messages.error(
-                request, "Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.")
-            return redirect('user:user_register')
-
-        if User.objects.filter(username=username).exists():
-            messages.error(request, "Username already taken.")
-            return redirect('user:user_register')
 
         if User.objects.filter(email=email).exists():
             messages.error(request, "Email already registered.")
             return redirect('user:user_register')
 
         user = User.objects.create_user(
-            username=username, email=email, password=password)
+            email=email,
+        )
+
         user.backend = 'django.contrib.auth.backends.ModelBackend'
         login(request, user)
         return redirect('user_login')
@@ -112,7 +101,7 @@ def otp_signup_request(request):
         email = request.POST.get('email')
         if User.objects.filter(email=email).exists():
             messages.error(request, "email already registered.")
-            return redirect('user:user_register')
+            return redirect('user:signup_request')
 
         otp = str(random.randint(100000, 999999))
         request.session['reset_email'] = email
@@ -169,48 +158,62 @@ def signup(request):
         return redirect('user:signup_request')
 
     if request.method == 'POST':
-        firstname = request.POST.get('firstname', '').strip()
-        lastname = request.POST.get('lastname', '').strip()
-        username = request.POST.get('username', '').strip()
-        password = request.POST.get('password')
-        confirm = request.POST.get('confirm_password')
+        form = CustomUserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save(commit=False)
+            user.email = email  # Set from session
+            user.username = form.cleaned_data['username']
 
-        if password != confirm:
-            messages.error(request, 'Passwords do not match.')
-            return redirect('user:signup')
+            # Check referral code
+            referral_code = form.cleaned_data.get('referral_code')
+            if referral_code:
+                try:
+                    referrer = User.objects.get(referral_code=referral_code)
+                    user.referred_by = referrer
+                except User.DoesNotExist:
+                    messages.warning(request, "Invalid referral code entered.")
+                    # Proceed without assigning referrer
 
-        if not is_strong_password(password):
-            messages.error(request, "Weak password.")
-            return redirect('user:signup')
+            user.save()
 
-        if User.objects.filter(email=email).exists():
-            messages.error(request, 'User already exists.')
+            # Referral reward
+            if user.referred_by:
+                Coupon.objects.create(
+                    code=f"REF-{user.referred_by.id}-{uuid.uuid4().hex[:5].upper()}",
+                    discount_amount=100,
+                    valid_from=timezone.now(),
+                    valid_to=timezone.now() + timedelta(days=30),
+                    active=True,
+                    user=user.referred_by
+                )
+
+            user.backend = 'django.contrib.auth.backends.ModelBackend'
+            login(request, user)
+            messages.success(request, 'Account created successfully.')
             return redirect('user:user_login')
-        if User.objects.filter(username=username).exists():
-            messages.error(request, 'Username already exists.')
-            return redirect('user:signup')
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        form = CustomUserCreationForm()
 
-        user = User.objects.create_user(
-            first_name=firstname, last_name=lastname, username=username, email=email, password=password
-        )
-        user.backend = 'django.contrib.auth.backends.ModelBackend'
-        login(request, user)
-
-        messages.success(request, 'Account created successfully.')
-        return redirect('user:user_login')
-
-    return render(request, 'user/signup.html')
+    return render(request, 'user/signup.html', {'form': form})
 
 
 @login_required
 def profile_view(request):
     user = request.user
-    profile, _ = Profile.objects.get_or_create(user=user)
+    my_referrals = user.referrals.all()
+    my_coupons = Coupon.objects.filter(user=user, is_deleted=False)
     addresses = Address.objects.filter(user=user)
+    baby_profiles = request.user.babies.all()
+
     return render(request, 'user/profile.html', {
         'user': user,
-        'profile': profile,
+        'my_referrals': my_referrals,
+        'my_coupons': my_coupons,
         'addresses': addresses,
+        'baby_profiles': baby_profiles,
+
     })
 
 
@@ -242,102 +245,100 @@ def change_password(request):
 @login_required
 def edit_profile(request):
     user = request.user
-    profile, _ = Profile.objects.get_or_create(user=user)
+    if request.method == "POST":
+        original_email = user.email
+        form = CustomUserUpdateForm(request.POST, request.FILES, instance=user)
 
-    if request.method == 'POST':
-        # User model fields
-        first_name = request.POST.get('first_name')
-        last_name = request.POST.get('last_name')
-        new_email = request.POST.get('email')
-        phone = request.POST.get('phone')
-        profile_image = request.FILES.get('profile_image')
+        if form.is_valid():
+            new_email = form.cleaned_data.get('email')
 
-        # Profile model fields
-        baby_name = request.POST.get('baby_name')
-        baby_dob = request.POST.get('baby_dob')
-        baby_gender = request.POST.get('baby_gender')
+            # Temporarily set the original email back before saving non-email fields
+            if new_email and new_email != original_email:
+                form.instance.email = original_email  # Prevent email change now
 
-        # Update user fields
-        user.first_name = first_name
-        user.last_name = last_name
-        user.phone = phone
-        ALLOWED_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp']
-        MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
+            form.save()  # Save other changes (name, image, etc.)
 
-        if profile_image:
-            ext = profile_image.name.split('.')[-1].lower()
-            if ext not in ALLOWED_EXTENSIONS:
-                messages.error(
-                    request, "Only JPG, PNG, and WEBP images are allowed.")
-                return redirect('user:edit_profile')
+            if new_email and new_email != original_email:
+                otp = str(random.randint(100000, 999999))
+                request.session['email_otp'] = otp
+                request.session['new_email'] = new_email
+                request.session['otp_sent_time'] = timezone.now().isoformat()
 
-            if profile_image.size > MAX_FILE_SIZE:
-                messages.error(request, "Image file size must not exceed 2MB.")
-                return redirect('user:edit_profile')
-            user.profile_image = profile_image
+                print(f"📧 OTP for {new_email}: {otp}")
+                messages.info(
+                    request, f"We've sent an OTP to {new_email}. Please verify to update your email."
+                )
+                return redirect("user:verify_email_otp")
 
-        if phone:
-            phone = phone.strip()
-            if not re.match(r'^\d{10}$', phone):
-                messages.error(
-                    request, "Phone number must be exactly 10 digits.")
-                return redirect('user:edit_profile')
+            messages.success(request, "Profile updated successfully.")
+            return redirect("user:edit_profile")
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        form = CustomUserUpdateForm(instance=user)
 
-        # Update profile fields
-        profile.baby_name = baby_name
-        profile.baby_gender = baby_gender
-        profile.baby_dob = baby_dob if baby_dob else None
+    return render(request, "user/edit_profile.html", {"form": form})
 
-        if new_email and new_email != user.email:
-            otp = str(random.randint(100000, 999999))
-            request.session['pending_email'] = new_email
-            request.session['email_otp'] = otp
-            print(f"📧 Email change OTP for {new_email} is: {otp}")
 
-            # send_mail(
-            #     subject='Verify Your New Email - BabyMuse',
-            #     message=f'Your OTP for verifying the new email is: {otp}',
-            #     from_email='noreply@babymuse.com',
-            #     recipient_list=[new_email],
-            #     fail_silently=False,
-            # )
+def verify_email_otp(request):
+    if request.method == "POST":
+        entered_otp = request.POST.get("otp")
+        session_otp = request.session.get("email_otp")
+        new_email = request.session.get("new_email")
 
-            messages.info(
-                request, f'OTP sent to {new_email}. Please verify to update your email.')
-            return redirect('user:verify_email_otp')
+        if not session_otp or not new_email:
+            messages.error(
+                request, "Session expired or invalid. Please try again.")
+            return redirect("user:edit_profile")
 
-        user.save()
-        profile.save()
-        messages.success(request, "Profile updated successfully.")
-        return redirect('user:profile')
+        if entered_otp == session_otp:
+            user = request.user
+            user.email = new_email
+            user.save()
 
-    return render(request, 'user/edit_profile.html', {
-        'user': user,
-        'profile': profile
+            # Clean up session
+            del request.session['email_otp']
+            del request.session['new_email']
+            del request.session['otp_sent_time']
+
+            messages.success(
+                request, "Email updated and verified successfully.")
+            return redirect("user:edit_profile")
+        else:
+            messages.error(request, "Invalid OTP. Please try again.")
+
+    # Handle GET or failed POST
+    remaining_seconds = 0
+    otp_sent_time = request.session.get("otp_sent_time")
+
+    if otp_sent_time:
+        now = timezone.now()
+        sent_time = timezone.datetime.fromisoformat(
+            otp_sent_time).replace(tzinfo=dt_timezone.utc)
+        elapsed = (now - sent_time).total_seconds()
+        remaining_seconds = max(0, 60 - int(elapsed))
+
+    return render(request, "user/verify_email_otp.html", {
+        "remaining_seconds": remaining_seconds
     })
 
 
 @login_required
-def verify_email_otp(request):
-    if request.method == 'POST':
-        input_otp = request.POST.get('otp')
-        session_otp = request.session.get('email_otp')
-        new_email = request.session.get('pending_email')
+def resend_email_otp(request):
+    new_email = request.session.get('new_email')
+    if not new_email:
+        messages.error(request, "No email found to resend OTP.")
+        return redirect('user:edit_profile')
 
-        if input_otp == session_otp and new_email:
-            request.user.email = new_email
-            request.user.save()
+    otp = str(random.randint(100000, 999999))
+    request.session['email_otp'] = otp
+    request.session['otp_sent_time'] = timezone.now().isoformat()
 
-            # Clean up session
-            request.session.pop('email_otp', None)
-            request.session.pop('pending_email', None)
+    print(f"🔁 Resent OTP for {new_email}: {otp}")
+    # TODO: Send OTP via email
 
-            messages.success(request, "✅ Email updated successfully.")
-            return redirect('user:profile')
-        else:
-            messages.error(request, "❌ Invalid OTP. Please try again.")
-
-    return render(request, 'user/verify_email_otp.html')
+    messages.success(request, f"OTP resent to {new_email}.")
+    return redirect('user:verify_email_otp')
 
 
 @login_required
@@ -349,63 +350,55 @@ def address_book(request):
 @login_required
 def add_address(request):
     if request.method == 'POST':
-        is_default = 'is_default' in request.POST
+        form = AddressForm(request.POST)
+        if form.is_valid():
+            address = form.save(commit=False)
+            address.user = request.user
 
-        if is_default:
-            # Unset previous default address for this user
-            Address.objects.filter(
-                user=request.user, is_default=True).update(is_default=False)
+            if address.is_default:
+                Address.objects.filter(
+                    user=request.user, is_default=True).update(is_default=False)
 
-        Address.objects.create(
-            user=request.user,
-            name=request.POST.get('name'),
-            phone=request.POST.get('phone'),
-            address_line1=request.POST.get('address_line1'),
-            address_line2=request.POST.get('address_line2'),
-            city=request.POST.get('city'),
-            state=request.POST.get('state'),
-            postal_code=request.POST.get('postal_code'),
-            is_default=is_default
-        )
-
-        messages.success(request, "Address added successfully!")
-        return redirect('user:address_book')
+            address.save()
+            messages.success(request, "Address added successfully.")
+            return redirect('user:address_book')
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        form = AddressForm()
 
     return render(request, 'user/add_address.html', {
+        'form': form,
         'title': '➕ Add Address',
-        'address': {}
     })
 
 
 @login_required
-def edit_address(request, id):
-    address = get_object_or_404(Address, id=id, user=request.user)
+def edit_address(request, address_id):
+    address = get_object_or_404(Address, id=address_id, user=request.user)
 
     if request.method == 'POST':
-        address.name = request.POST.get('name')
-        address.phone = request.POST.get('phone')
-        address.address_line1 = request.POST.get('address_line1')
-        address.address_line2 = request.POST.get('address_line2')
-        address.city = request.POST.get('city')
-        address.state = request.POST.get('state')
-        address.postal_code = request.POST.get('postal_code')
+        form = AddressForm(request.POST, instance=address)
+        if form.is_valid():
+            updated_address = form.save(commit=False)
+            updated_address.user = request.user
 
-        is_default = 'is_default' in request.POST
+            # Handle default address update
+            if updated_address.is_default:
+                Address.objects.filter(user=request.user, is_default=True).exclude(
+                    id=address.id).update(is_default=False)
 
-        if is_default:
-            # Unset all other default addresses
-            Address.objects.filter(user=request.user, is_default=True).exclude(
-                id=address.id).update(is_default=False)
-
-        address.is_default = is_default
-        address.save()
-
-        messages.success(request, "Address updated successfully!")
-        return redirect('user:address_book')
+            updated_address.save()
+            messages.success(request, "Address updated successfully.")
+            return redirect('user:address_book')
+        else:
+            messages.error(request, "Please fix the errors below.")
+    else:
+        form = AddressForm(instance=address)
 
     return render(request, 'user/add_address.html', {
+        'form': form,
         'title': '✏️ Edit Address',
-        'address': address
     })
 
 
@@ -504,3 +497,42 @@ def reset_password(request):
             except:
                 messages.error(request, 'Something went wrong.')
     return render(request, 'user/reset_password.html')
+# baby profile
+
+
+@login_required
+def add_baby_profile(request):
+    if request.method == 'POST':
+        form = BabyProfileForm(request.POST)
+        if form.is_valid():
+            baby = form.save(commit=False)
+            baby.user = request.user
+            baby.save()
+            messages.success(request, 'Baby profile added successfully.')
+
+            return redirect('user:profile')
+    else:
+        form = BabyProfileForm()
+    return render(request, 'user/baby_profile_form.html', {'form': form, 'title': 'Add Baby Profile'})
+
+
+@login_required
+def edit_baby_profile(request, pk):
+    baby = get_object_or_404(BabyProfile, pk=pk, user=request.user)
+    if request.method == 'POST':
+        form = BabyProfileForm(request.POST, instance=baby)
+        if form.is_valid():
+            form.save()
+            return redirect('user:profile')
+    else:
+        form = BabyProfileForm(instance=baby)
+    return render(request, 'user/baby_profile_form.html', {'form': form, 'title': 'Edit Baby Profile'})
+
+
+@login_required
+def delete_baby_profile(request, pk):
+    baby = get_object_or_404(BabyProfile, pk=pk, user=request.user)
+    if request.method == 'POST':
+        baby.delete()
+        return redirect('user:profile')
+    return render(request, 'user/baby_profile_confirm_delete.html', {'baby': baby})

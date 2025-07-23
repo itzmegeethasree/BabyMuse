@@ -2,9 +2,9 @@ from datetime import timezone
 import json
 from django.shortcuts import render, redirect, get_object_or_404
 
-from shop.models import CartItem, Product, ReturnRequest
+from shop.models import CartItem
 from user.models import Address
-from shop.models import Order, OrderItem
+from orders.models import Order, OrderItem, ReturnRequest
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from decimal import Decimal
@@ -12,6 +12,7 @@ from django.db.models import Q
 from django.http import HttpResponse
 from django.template.loader import get_template
 from xhtml2pdf import pisa
+from django.core.paginator import Paginator
 
 
 from decimal import Decimal
@@ -19,11 +20,11 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 
-from shop.models import Order, OrderItem
-from shop.models import CartItem, Address
+from shop.models import CartItem
 
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
+from django.views.decorators.http import require_POST
 
 
 from decimal import Decimal
@@ -37,7 +38,22 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 import razorpay
 from .models import Coupon
-from shop.models import Order, OrderItem, CartItem, Address
+from utils.coupon import validate_coupon
+
+
+from decimal import Decimal
+from django.utils import timezone
+
+
+from decimal import Decimal
+from django.utils import timezone
+from utils.coupon import validate_coupon
+from orders.models import Coupon
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib import messages
+import razorpay
+from django.conf import settings
 
 
 @login_required
@@ -49,46 +65,44 @@ def checkout_view(request):
         messages.warning(request, "Your cart is empty.")
         return redirect('shop')
 
-    # Product check
+    # Check product availability
     unavailable_products = []
     for item in cart_items:
         product = item.product
         if not product or product.stock < item.quantity or product.is_deleted:
-            unavailable_products.append(product.name)
+            unavailable_products.append(
+                product.name if product else "Unknown product")
 
     if unavailable_products:
         messages.error(
             request, f"The following items are unavailable: {', '.join(unavailable_products)}")
         return redirect('shop:cart')
-    applied_coupon = None
-    discount = Decimal('0.00')
 
-    if 'applied_coupon' in request.session:
-        try:
-            applied_coupon = Coupon.objects.get(
-                code=request.session['applied_coupon'], active=True)
-            if applied_coupon.valid_from <= timezone.now() <= applied_coupon.valid_to and subtotal >= applied_coupon.minimum_amount:
-                if applied_coupon.is_percentage:
-                    discount = subtotal * \
-                        (applied_coupon.discount / Decimal('100'))
-                else:
-                    discount = applied_coupon.discount
-            else:
-                del request.session['applied_coupon']
-        except Coupon.DoesNotExist:
-            pass
-
-    # Pricing
-    subtotal = sum(item.product.price * item.quantity for item in cart_items)
-    shipping = Decimal('50.00') if subtotal < 1000 else Decimal('0.00')
+    # Price calculation
+    subtotal = sum(item.product.get_offer_price() *
+                   item.quantity for item in cart_items)
+    shipping = Decimal('50.00') if subtotal < 500 else Decimal('0.00')
     tax = subtotal * Decimal('0.05')
     discount = Decimal('0.00')
+    coupon_obj = None
+
+    coupon_code = request.session.get('applied_coupon')
+    if coupon_code:
+        try:
+            coupon = Coupon.objects.get(code=coupon_code, active=True)
+            result, error = validate_coupon(coupon.code, subtotal)
+            if not error:
+                coupon_obj = result['coupon']
+                discount = result['discount']
+        except Exception:
+            pass
+
     total = subtotal + shipping + tax - discount
 
     addresses = Address.objects.filter(user=user)
     default_address = addresses.filter(is_default=True).first()
 
-    if request.method == 'POST':
+    if request.method == 'POST' and 'place_order' in request.POST:
         selected_address_id = request.POST.get('address')
         payment_method = request.POST.get('payment_method')
 
@@ -103,21 +117,34 @@ def checkout_view(request):
             user=user,
             address=address,
             total_price=total,
-            payment_method=payment_method
+            payment_method=payment_method,
+            status="Pending",
+            is_paid=False,
+            coupon=coupon_obj,
+            discount_amount=discount,
         )
 
+        for item in cart_items:
+            OrderItem.objects.create(
+                order=order,
+                product=item.product,
+                quantity=item.quantity,
+                price=item.product.price,
+            )
+
         if payment_method == 'COD':
+            order.is_paid = True
+            order.status = "Confirmed"
+            order.save()
+
             for item in cart_items:
-                OrderItem.objects.create(
-                    order=order,
-                    product=item.product,
-                    quantity=item.quantity,
-                    price=item.product.price
-                )
                 item.product.stock -= item.quantity
                 item.product.save()
 
             cart_items.delete()
+            request.session.pop('applied_coupon', None)
+            request.session.pop('discount', None)
+
             return redirect('orders:order_success', order_id=order.id)
 
         elif payment_method == 'RAZORPAY':
@@ -134,7 +161,6 @@ def checkout_view(request):
 
             return render(request, "order/razorpay_payment.html", {
                 "order": order,
-                "cart_items": cart_items,
                 "razorpay_order_id": razorpay_order['id'],
                 "razorpay_key": settings.RAZORPAY_KEY_ID,
                 "amount": int(total * 100),
@@ -145,12 +171,59 @@ def checkout_view(request):
     return render(request, 'order/checkout.html', {
         'cart_items': cart_items,
         'addresses': addresses,
+        'default_address': default_address,
         'subtotal': subtotal,
         'shipping': shipping,
         'tax': tax,
         'discount': discount,
         'total': total,
-        'default_address': default_address
+        'coupon_code': request.session.get('applied_coupon', '')
+    })
+
+
+@require_POST
+@login_required
+def ajax_apply_coupon(request):
+    code = request.POST.get('coupon_code', '').strip()
+    user = request.user
+
+    # Step 1: Find a valid coupon
+    coupon = Coupon.objects.filter(code=code, active=True, user=user).first()
+
+    # Step 2: Prepare order amounts
+    cart_items = CartItem.objects.filter(user=user).select_related('product')
+    subtotal = sum(item.product.price * item.quantity for item in cart_items)
+    shipping = 50.00 if subtotal < 1000 else 0.00
+    tax = subtotal * 0.05
+
+    discount = 0.0
+    coupon_code = ""
+    coupon_msg = ""
+    success = False
+
+    # Step 3: Validate coupon business logic
+    result, error = validate_coupon(code, subtotal)
+    if error:
+        coupon_msg = error
+    else:
+        coupon_obj = result['coupon']
+        discount = float(result['discount'])
+        coupon_code = coupon_obj.code
+        coupon_msg = f"Coupon '{coupon_obj.code}' applied successfully!"
+        request.session['applied_coupon'] = coupon_code
+        request.session['discount'] = discount
+        success = True
+
+    # Step 4: Final total calculation
+    total = subtotal + shipping + tax - discount
+
+    # Step 5: Return response
+    return JsonResponse({
+        "success": success,
+        "msg": coupon_msg,
+        "discount": "%.2f" % discount,
+        "total": "%.2f" % total,
+        "coupon_code": coupon_code,
     })
 
 
@@ -160,43 +233,29 @@ def razorpay_success(request):
     data = json.loads(request.body)
 
     try:
-        # Initialize Razorpay client
         client = razorpay.Client(
             auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET)
         )
 
-        # Step 1: Verify Razorpay Signature
-        params_dict = {
+        client.utility.verify_payment_signature({
             'razorpay_order_id': data['razorpay_order_id'],
             'razorpay_payment_id': data['razorpay_payment_id'],
             'razorpay_signature': data['razorpay_signature']
-        }
-        client.utility.verify_payment_signature(params_dict)
+        })
 
-        # Step 2: Fetch order
         order = Order.objects.get(id=data['order_id'], user=request.user)
 
-        # Step 3: Mark as paid and confirmed
         order.is_paid = True
         order.status = "Confirmed"
         order.save()
 
-        # Step 4: Process cart to order items
-        cart_items = CartItem.objects.filter(
-            user=request.user).select_related('product')
-        for item in cart_items:
-            OrderItem.objects.create(
-                order=order,
-                product=item.product,
-                quantity=item.quantity,
-                price=item.product.price
-            )
-            item.product.stock -= item.quantity
-            item.product.save()
+        for item in order.orderitem_set.select_related('product'):
+            if item.product:
+                item.product.stock -= item.quantity
+                item.product.save()
 
-        cart_items.delete()
+        CartItem.objects.filter(user=request.user).delete()
 
-        # Step 5: Return success with redirect URL
         return JsonResponse({
             'status': 'success',
             'order_id': order.id,
@@ -204,69 +263,54 @@ def razorpay_success(request):
         })
 
     except razorpay.errors.SignatureVerificationError:
+        order = Order.objects.filter(id=data.get(
+            'order_id'), user=request.user).first()
+        if order:
+            order.status = "Failed"
+            order.save()
+
         return JsonResponse({
             'status': 'failure',
             'order_id': data.get('order_id'),
-            'redirect_url': f"/orders/payment-failed/?order_id={data.get('order_id')}"
+            'redirect_url': f"/orders/payment_failed/{data.get('order_id')}/"
         })
 
     except Order.DoesNotExist:
         return JsonResponse({
             'status': 'failure',
             'message': 'Order not found',
-            'redirect_url': "/orders/payment-failed/"
+            'redirect_url': "/orders/payment_failed/"
         })
 
 
 @csrf_exempt
-def razorpay_webhook(request):
+@login_required
+def mark_payment_failed(request):
     if request.method == "POST":
+        data = json.loads(request.body)
+        order_id = data.get('order_id')
+
         try:
-            payload = request.body
-            received_signature = request.headers.get('X-Razorpay-Signature')
+            order = Order.objects.get(id=order_id, user=request.user)
+            order.status = "Failed"
+            order.save()
 
-            client = razorpay.Client(
-                auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
-
-            # Optional: use a webhook secret if you defined one
-            # webhook_secret = settings.RAZORPAY_WEBHOOK_SECRET
-            # client.utility.verify_webhook_signature(payload, received_signature, webhook_secret)
-
-            data = json.loads(payload)
-
-            # Process the event
-            if data.get('event') == "payment.failed":
-                razorpay_order_id = data['payload']['payment']['entity']['order_id']
-                order = Order.objects.filter(
-                    razorpay_order_id=razorpay_order_id).first()
-                if order:
-                    order.status = "Failed"
-                    order.save()
-
-            elif data.get('event') == "payment.captured":
-                razorpay_order_id = data['payload']['payment']['entity']['order_id']
-                order = Order.objects.filter(
-                    razorpay_order_id=razorpay_order_id).first()
-                if order:
-                    order.status = "Confirmed"
-                    order.is_paid = True
-                    order.save()
-
-            return HttpResponse(status=200)
-
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=400)
-    return HttpResponse("Invalid request", status=400)
+            return JsonResponse({
+                "status": "failed",
+                "redirect_url": f"/orders/payment_failed/{order_id}/"
+            })
+        except Order.DoesNotExist:
+            return JsonResponse({
+                "status": "error",
+                "message": "Order not found",
+                "redirect_url": "/orders/payment_failed/"
+            }, status=404)
 
 
 @login_required
-def payment_failed_view(request):
-    order_id = request.GET.get('order_id')
-    if not order_id:
-        messages.error(request, "Invalid request.")
-        return redirect('shop')
-
-    return render(request, 'order/payment_failed.html', {'order_id': order_id})
+def payment_failed_view(request, order_id):
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+    return render(request, 'order/payment_failed.html', {'order': order})
 
 
 @login_required
@@ -305,9 +349,17 @@ def order_list_view(request):
     orders = Order.objects.filter(user=request.user)
 
     if query:
-        orders = orders.filter(id__icontains=query)
+        orders = orders.filter(
+            Q(id__icontains=query) | Q(status__icontains=query)
+        )
 
-    return render(request, 'order/order.html', {'orders': orders})
+    orders = orders.order_by('-created_at')  # Newest first
+
+    paginator = Paginator(orders, 10)  # 10 orders per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    return render(request, 'order/order.html', {'orders': page_obj})
 
 
 @login_required
@@ -335,7 +387,16 @@ def cancel_order(request, order_id):
             item.product.stock += item.quantity
             item.product.save()
 
-        messages.success(request, f"Order #{order.id} cancelled successfully.")
+        if order.payment_method != 'COD':
+            user = request.user
+            user.wallet_balance += order.total_price
+            user.save()
+            messages.success(
+                request, f"Order #{order.id} cancelled and amount refunded to your wallet.")
+        else:
+            messages.success(
+                request, f"Order #{order.id} cancelled. No payment was collected, so no refund issued.")
+
         return redirect('orders:order')
 
     return render(request, 'order/cancel_order.html', {'order': order})

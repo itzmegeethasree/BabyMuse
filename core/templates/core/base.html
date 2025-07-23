@@ -81,7 +81,7 @@
           <div id="profile-dropdown"
             class="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-50 hidden">
             <a href="{% url 'user:profile' %}" class="block px-4 py-2 hover:bg-gray-100">👤 My Profile</a>
-            <a href="#" class="block px-4 py-2 hover:bg-gray-100">📦 My Orders</a>
+            <a href="{% url 'orders:order'%}" class="block px-4 py-2 hover:bg-gray-100">📦 My Orders</a>
             <a href="{% url 'wishlist' %}" class="block px-4 py-2 hover:bg-gray-100">❤️ Wishlist</a>
             <hr class="my-1">
             <a href="{% url 'user:user_logout' %}" class="block px-4 py-2 text-red-600 hover:bg-gray-100">🚪 Logout</a>

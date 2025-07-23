@@ -27,12 +27,48 @@
             <p><strong>Full Name:</strong> {{ user.first_name }} {{ user.last_name }}</p>
             <p><strong>Email:</strong> {{ user.email }}</p>
             <p><strong>Phone:</strong> {{ user.phone }}</p>
-
+            <p><strong>Wallet Balance:</strong>₹{{ user.wallet_balance}}</p>
             <hr class="my-4">
+            <p><strong>Joined:</strong> {{ user.date_joined|date:"F j, Y" }}</p>
+            <!-- Referral Code Section -->
+            <div class="bg-white shadow p-4 rounded mb-6">
+                <h2 class="text-xl font-semibold">📣 Invite & Earn</h2>
+                <p>Your Referral Code:
+                    <span class="font-mono bg-gray-100 px-2 py-1 rounded">{{ user.referral_code }}</span>
+                </p>
+                <p>Share this code with friends to earn a Coupon when they join.</p>
+            </div>
 
-            <p><strong>Baby Name:</strong> {{ profile.baby_name|default:"-" }}</p>
-            <p><strong>Baby DOB:</strong> {{ profile.baby_dob|date:"F j, Y"|default:"-" }}</p>
-            <p><strong>Baby Gender:</strong> {{ profile.baby_gender|default:"-" }}</p>
+            <!-- Referrals Tracking -->
+            <div class="bg-white shadow p-4 rounded mb-6">
+                <h2 class="text-xl font-semibold mb-2">👥 Your Referrals</h2>
+                {% if my_referrals %}
+                <ul class="list-disc pl-6">
+                    {% for r in my_referrals %}
+                    <li>{{ r.username }} - Joined on {{ r.date_joined|date:"M d, Y" }}</li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p>No referrals yet.</p>
+                {% endif %}
+            </div>
+
+            <!-- Earned Coupons -->
+            <div class="bg-white shadow p-4 rounded mb-6">
+                <h2 class="text-xl font-semibold mb-2">🎟 Earned Coupons</h2>
+                {% if my_coupons %}
+                <ul class="space-y-1">
+                    {% for coupon in my_coupons %}
+                    <li>
+                        <span class="font-semibold">{{ coupon.code }}</span>
+                        — ₹{{ coupon.discount_amount }} off, valid till {{ coupon.valid_to|date:"M d, Y" }}
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p>No coupons yet.</p>
+                {% endif %}
+            </div>
 
             <div class="mt-6 flex flex-wrap gap-4">
                 <a href="{% url 'user:edit_profile' %}"
@@ -44,6 +80,11 @@
                 <a href="{% url 'orders:order'%}"
                     class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">My
                     Orders</a>
+                <a href="{% url 'user:add_baby_profile' %}"
+                    class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-purple-700">
+                    Add Baby
+                </a>
+
             </div>
         </div>
     </div>
@@ -68,5 +109,33 @@
         <p class="text-gray-500">No addresses saved yet.</p>
         {% endif %}
     </div>
+    <!-- Baby Profiles Section -->
+    <div class="mt-10">
+        <h2 class="text-2xl font-semibold mb-4">👶 Baby Profiles</h2>
+
+
+        {% if baby_profiles %}
+        <div class="grid gap-4">
+            {% for baby in baby_profiles %}
+            <div class="border p-4 rounded-md bg-white shadow-sm">
+                <p><strong>Name:</strong> {{ baby.baby_name|default:"N/A" }}</p>
+                <p><strong>DOB:</strong> {{ baby.baby_dob|date:"M d, Y"|default:"N/A" }}</p>
+                <p><strong>Gender:</strong> {{ baby.baby_gender|default:"N/A" }}</p>
+                <p><strong>Weight:</strong> {{ baby.birth_weight|default:'' }} kg </p>
+                <p><strong>Height:</strong> {{ baby.birth_height |default:''}} cm</p>
+                {% if baby.notes %}<p><strong>Notes:</strong> {{ baby.notes }}</p>{% endif %}
+
+                <div class="mt-3 flex gap-2">
+                    <a href="{% url 'user:edit_baby_profile' baby.id %}" class="text-blue-600 underline">Edit</a>
+                    <a href="{% url 'user:delete_baby_profile' baby.id %}" class="text-red-600 underline">Delete</a>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-gray-500">No baby profiles added yet.</p>
+        {% endif %}
+    </div>
+
 </section>
 {% endblock %}

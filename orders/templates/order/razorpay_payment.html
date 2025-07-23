@@ -17,22 +17,19 @@
     </button>
 </div>
 
-<!-- Razorpay Checkout Script -->
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 
 <script>
 
     const options = {
-        key: "{{ razorpay_key }}", // From Django settings
-        amount: "{{ amount }}",       // Amount in paise
+        key: "{{ razorpay_key }}",
+        amount: "{{ amount }}",
         currency: "INR",
         name: "BabyMuse",
         description: "Payment for Order #{{ order.id }}",
-        image: "{% static 'images/logo.png' %}",  // Optional logo
-        order_id: "{{ razorpay_order_id }}", // Razorpay order ID
+        order_id: "{{ razorpay_order_id }}",
 
         handler: function (response) {
-            // POST payment success info to server
             fetch("{% url 'orders:razorpay_success' %}", {
                 method: 'POST',
                 headers: {
@@ -48,11 +45,7 @@
             })
                 .then(res => res.json())
                 .then(data => {
-                    if (data.status === 'success') {
-                        window.location.href = data.redirect_url;
-                    } else {
-                        window.location.href = data.redirect_url;
-                    }
+                    window.location.href = data.redirect_url;
                 });
         },
 
@@ -63,6 +56,25 @@
 
         theme: {
             color: "#f97316"
+        },
+
+        modal: {
+            ondismiss: function () {
+                fetch("{% url 'orders:mark_payment_failed' %}", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': '{{ csrf_token }}'
+                    },
+                    body: JSON.stringify({
+                        order_id: "{{ order.id }}"
+                    })
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        window.location.href = data.redirect_url;
+                    });
+            }
         }
     };
 

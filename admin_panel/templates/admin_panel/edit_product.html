@@ -37,6 +37,28 @@
     <label for="description" class="block font-semibold">Description</label>
     <textarea name="description" id="description" placeholder="Product Description"
       class="w-full px-4 py-2 border rounded" rows="4" required>{{ product.description }}</textarea>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label class="block mb-1 font-medium">Min Age (months)</label>
+        <input type="number" name="min_age" min="0" max="36" class="w-full px-4 py-2 border rounded"
+          value="{{ product.min_age }}" />
+      </div>
+      <div>
+        <label class="block mb-1 font-medium">Max Age (months)</label>
+        <input type="number" name="max_age" min="0" max="36" class="w-full px-4 py-2 border rounded"
+          value="{{ product.max_age }}" />
+      </div>
+    </div>
+
+    <div>
+      <label class="block mb-1 font-medium">Gender</label>
+      <select name="gender" class="w-full px-4 py-2 border rounded">
+        <option value="Unisex" {% if product.gender|equals_id:"Unisex" %}selected{% endif %}>Unisex</option>
+        <option value="Male" {% if product.gender|equals_id:"Male" %}selected{% endif %}>Male</option>
+        <option value="Female" {% if product.gender|equals_id:"Female" %}selected{% endif %}>Female</option>
+      </select>
+    </div>
+
 
     <!-- Price -->
     <label for="price" class="block font-semibold">Price (₹)</label>
@@ -65,9 +87,20 @@
       {% endfor %}
     </div>
 
-    <!-- Upload New Images -->
-    <label for="images" class="block font-semibold">Upload New Images (optional)</label>
-    <input type="file" id="images" name="images" multiple accept="image/*" class="w-full px-4 py-2 border rounded" />
+    <!-- Upload New Images (Cropper.js) -->
+    <label class="block font-semibold">Upload New Images (optional, will replace all images)</label>
+    <input type="file" id="imageInput" accept="image/*" class="w-full px-4 py-2 border rounded mb-2" />
+    <div id="cropperContainer" class="w-64 h-64 mx-auto mb-2 hidden">
+      <img id="imagePreview" class="object-contain w-full h-full rounded shadow" />
+    </div>
+    <div class="flex gap-2 mb-2">
+      <button id="addCroppedBtn" type="button" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Add
+        Cropped Image</button>
+    </div>
+    <div id="croppedImagesPreview" class="flex gap-4 mb-2"></div>
+    <div id="croppedInputs"></div>
+    <p class="text-sm text-gray-500">If you upload new images, you must crop and add exactly 3 images. Otherwise, leave
+      blank to keep current images.</p>
 
     <!-- Submit -->
     <div class="flex justify-end">
@@ -78,3 +111,76 @@
   </form>
 </div>
 {% endblock %}
+
+<!-- Add in <head> -->
+<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet" />
+<!-- Before </body> -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
+<script>
+  let cropper;
+  let croppedImages = [];
+  const imageInput = document.getElementById('imageInput');
+  const imagePreview = document.getElementById('imagePreview');
+  const cropperContainer = document.getElementById('cropperContainer');
+  const addCroppedBtn = document.getElementById('addCroppedBtn');
+  const croppedImagesPreview = document.getElementById('croppedImagesPreview');
+  const croppedInputs = document.getElementById('croppedInputs');
+  const productForm = document.querySelector('form');
+
+  imageInput.addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    if (file) {
+      cropperContainer.classList.remove('hidden');
+      const url = URL.createObjectURL(file);
+      imagePreview.src = url;
+      if (cropper) cropper.destroy();
+      cropper = new Cropper(imagePreview, {
+        aspectRatio: 1,
+        viewMode: 1,
+        autoCropArea: 1,
+      });
+    }
+  });
+
+  addCroppedBtn.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (cropper && croppedImages.length < 3) {
+      cropper.getCroppedCanvas({ width: 600, height: 600 }).toBlob(function (blob) {
+        const file = new File([blob], `cropped${croppedImages.length + 1}.jpg`, { type: "image/jpeg" });
+        croppedImages.push(file);
+
+        // Preview
+        const imgElem = document.createElement('img');
+        imgElem.src = URL.createObjectURL(file);
+        imgElem.className = "w-20 h-20 object-cover rounded border";
+        croppedImagesPreview.appendChild(imgElem);
+
+        // Hidden input for form
+        const inputElem = document.createElement('input');
+        inputElem.type = "file";
+        inputElem.name = "images";
+        inputElem.files = (function () {
+          const dt = new DataTransfer();
+          dt.items.add(file);
+          return dt.files;
+        })();
+        inputElem.className = "hidden";
+        croppedInputs.appendChild(inputElem);
+
+        // Reset for next image
+        cropper.destroy();
+        cropperContainer.classList.add('hidden');
+        imageInput.value = "";
+      }, 'image/jpeg', 0.95);
+    }
+  });
+
+  // Prevent form submission unless 3 images are added if any new images are uploaded
+  productForm.addEventListener('submit', function (e) {
+    if (croppedImages.length !== 0 && croppedImages.length !== 3) {
+      e.preventDefault();
+      alert("Please crop and add exactly 3 images if you are uploading new images.");
+    }
+  });
+</script>

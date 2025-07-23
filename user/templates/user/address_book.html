@@ -6,6 +6,7 @@
     <h2 class="text-2xl font-semibold mb-4">📍 My Addresses</h2>
     <a href="{% url 'user:add_address' %}" class="bg-blue-600 text-white px-4 py-2 rounded mb-4 inline-block">➕ Add New
         Address</a>
+    <a href="{% url 'user:profile' %}" class="text-blue-600 underline">← Back to Profile</a>
 
     {% if addresses %}
     <div class="space-y-4">

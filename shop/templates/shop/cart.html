@@ -27,7 +27,21 @@
               class="w-20 h-20 object-cover rounded-md">
           </td>
           <td class="p-4 font-semibold">{{ item.product.name }}</td>
-          <td class="p-4">₹{{ item.product.price }}</td>
+          <td class="text-left">
+
+            {% with offer=item.product.get_active_offer %}
+            {% if offer.1 > 0 %}
+            <div class="text-red-600 font-medium">
+              ₹{{ item.product.get_offer_price|floatformat:0 }}
+              <span class="text-gray-400 text-sm line-through ml-1">₹{{ item.product.price|floatformat:0 }}</span>
+            </div>
+            {% else %}
+            <div class="text-gray-800 font-medium">
+              ₹{{ item.product.price|floatformat:0 }}
+            </div>
+            {% endif %}
+            {% endwith %}
+          </td>
           <td class="p-4">
             <div class="flex items-center gap-2 justify-center">
               <button class="px-2 bg-gray-200 rounded quantity-btn" data-product-id="{{ item.product.id }}"
@@ -38,9 +52,11 @@
             </div>
           </td>
           <td class="p-4" id="row-total-{{ item.product.id }}">
-            ₹{{ item.product.price|floatformat:2 }} × {{ item.quantity }} =
-            <strong>₹{{ item.total_price|default_if_none:0|floatformat:2 }}</strong>
+            ₹{{ item.product.get_offer_price|floatformat:2 }} × {{ item.quantity }} =
+            <strong> ₹{{ item.product.get_offer_price|mul:item.quantity|floatformat:2 }}
+            </strong>
           </td>
+
           <td class="p-4">
             <button onclick="removeFromCart('{{ item.product.id }}')"
               class="text-red-600 hover:underline">Remove</button>

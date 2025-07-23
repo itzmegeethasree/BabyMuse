@@ -2,6 +2,23 @@
 {% load static %}
 
 {% block content %}
+
+
+{% if unavailable_items %}
+<div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 mb-10 rounded max-w-2xl mx-auto">
+    <h3 class="font-semibold mb-2">⚠️ Some items in your order are unavailable</h3>
+    <ul class="list-disc pl-5 text-left">
+        {% for item in unavailable_items %}
+        <li>
+            <strong>{{ item.name }}</strong> - Ordered: {{ item.ordered_qty }},
+            Available: {{ item.available_stock }} —
+            <span class="font-medium text-red-600">{{ item.status }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+    <p class="mt-4 text-sm italic">We're working to restock these items. Thank you for your patience!</p>
+</div>
+{% else %}
 <section class="max-w-2xl mx-auto text-center py-20">
     <img src="{% static 'images/success.png' %}" class="w-48 mx-auto mb-6" alt="Success icon">
     <h2 class="text-3xl font-bold mb-4">🎉 Thank You!</h2>
@@ -19,19 +36,5 @@
     </div>
 </section>
 
-{% if unavailable_items %}
-<div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 p-4 mb-10 rounded max-w-2xl mx-auto">
-    <h3 class="font-semibold mb-2">⚠️ Some items in your order are unavailable</h3>
-    <ul class="list-disc pl-5 text-left">
-        {% for item in unavailable_items %}
-        <li>
-            <strong>{{ item.name }}</strong> - Ordered: {{ item.ordered_qty }},
-            Available: {{ item.available_stock }} —
-            <span class="font-medium text-red-600">{{ item.status }}</span>
-        </li>
-        {% endfor %}
-    </ul>
-    <p class="mt-4 text-sm italic">We're working to restock these items. Thank you for your patience!</p>
-</div>
 {% endif %}
 {% endblock %}
