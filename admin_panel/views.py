@@ -1,4 +1,7 @@
 from django.contrib.auth import get_user_model
+
+from .forms import CategoryForm
+from shop.models import Category
 from .models import AdminUser
 from django.contrib.auth.hashers import check_password, make_password
 from django.shortcuts import render, redirect, get_object_or_404
@@ -9,6 +12,8 @@ from django.core.mail import send_mail
 from django.conf import settings
 from .decorators import admin_login_required
 from django.views.decorators.http import require_POST
+from django.core.paginator import Paginator
+from django.db.models import Sum, Q
 
 
 # from orders.models import Order, ORDER_STATUS, OrderItem, ReturnRequest
@@ -19,9 +24,7 @@ from django.views.decorators.http import require_POST
 # from django.utils.dateparse import parse_date
 # from django.http import HttpResponse, FileResponse
 # from shop.models import Product, Category, ProductImage
-# from django.core.paginator import Paginator
 # from django.http import HttpResponse
-# from django.db.models import Sum, Q
 # from .forms import ProductForm, CouponForm
 # from shop.forms import CategoryForm, CategoryOfferForm, ProductOfferForm
 # from io import BytesIO
@@ -135,6 +138,60 @@ def change_admin_password(request):
             messages.success(request, "Password updated successfully")
             return redirect('admin_panel:admin_profile')
     return render(request, 'admin_panel/change_password.html')
+
+
+# category management/
+@admin_login_required
+def category_list(request):
+    search_query = request.GET.get('q', '')
+    categories = Category.objects.filter(is_deleted=False)
+
+    if search_query:
+        categories = categories.filter(Q(name__icontains=search_query))
+
+    categories = categories.order_by('-created_at')
+    paginator = Paginator(categories, 10)
+    page = request.GET.get('page')
+    categories = paginator.get_page(page)
+
+    return render(request, 'admin_panel/category_list.html', {
+        'categories': categories,
+        'search_query': search_query
+    })
+
+
+@admin_login_required
+def add_category(request):
+    form = CategoryForm(request.POST or None)
+    if form.is_valid():
+        form.save()
+        messages.success(request, "Category added successfully.")
+        return redirect('admin_panel:category_list')
+    return render(request, 'admin_panel/category_form.html', {'form': form, 'title': 'Add Category'})
+
+
+@admin_login_required
+def edit_category(request, pk):
+    category = get_object_or_404(Category, pk=pk, is_deleted=False)
+    if request.method == 'POST':
+        form = CategoryForm(request.POST, instance=category)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Category updated successfully.")
+            return redirect('admin_panel:category_list')
+    else:
+        form = CategoryForm(instance=category)
+    return render(request, 'admin_panel/category_form.html', {'form': form, 'title': 'Edit Category'})
+
+
+@admin_login_required
+def delete_category(request, pk):
+    category = get_object_or_404(Category, pk=pk)
+    category.is_deleted = True
+    category.save()
+    messages.success(request, "Category deleted.")
+    return redirect('admin_panel:category_list')
+
 
 # order management
 
@@ -509,57 +566,6 @@ def admin_toggle_product_visibility(request, product_id):
     status = "listed" if not product.is_deleted else "unlisted"
     messages.success(request, f"Product successfully {status}.")
     return redirect('admin_panel:admin_products')
-
-# category Management
-
-
-@admin_login_required
-def category_list(request):
-    categories = Category.objects.all()
-    paginator = Paginator(categories, 10)
-    page_obj = paginator.get_page(request.GET.get('page'))
-    return render(request, 'admin_panel/category_list.html', {'page_obj': page_obj})
-
-
-@admin_login_required
-def add_category(request):
-
-    if request.method == 'POST':
-        form = CategoryForm(request.POST)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Category added successfully.')
-            return redirect('admin_panel:admin_category_list')
-    else:
-        form = CategoryForm()
-    categories = Category.objects.filter(
-        parent__isnull=True)
-
-    return render(request, 'admin_panel/add_category.html', {'form': form, 'categories': categories})
-
-
-@admin_login_required
-def edit_category(request, category_id):
-    category = get_object_or_404(Category, id=category_id)
-    if request.method == 'POST':
-        form = CategoryForm(request.POST, instance=category)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Category updated.')
-            return redirect('admin_panel:admin_category_list')
-    else:
-        form = CategoryForm(instance=category)
-    categories = Category.objects.filter(
-        parent__isnull=True).exclude(id=category.id)
-    return render(request, 'admin_panel/edit_category.html', {'form': form, 'categories': categories})
-
-
-@admin_login_required
-def delete_category(request, category_id):
-    category = get_object_or_404(Category, id=category_id)
-    category.delete()
-    messages.success(request, 'Category deleted.')
-    return redirect('admin_panel:admin_category_list')
 
 # customer management
 

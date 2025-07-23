@@ -1,7 +1,48 @@
 from django import forms
-from shop.models import Product
+from shop.models import Category, Product
 from .widgets import MultiFileInput
 from orders.models import Coupon
+import re
+
+
+class CategoryForm(forms.ModelForm):
+    class Meta:
+        model = Category
+        fields = ['name', 'description', 'parent',
+                  'offer_percentage', 'is_active']
+
+    def clean_name(self):
+        name = self.cleaned_data['name']
+        if not name or not isinstance(name, str):
+            raise forms.ValidationError(
+                "Category name is required and must be a string .")
+        if len(name.strip()) < 3:
+            raise forms.ValidationError(
+                "Category name must be at least 3 characters.")
+        if not re.search(r"^[a-zA-Z]", name):
+            raise forms.ValidationError(
+                "Name can contains atleast one character.")
+
+        return name.strip()
+
+    def clean_description(self):
+        desc = self.cleaned_data.get('description', '')
+        if desc and len(desc.strip()) < 5:
+            raise forms.ValidationError(
+                "Description must be at least 5 characters if provided.")
+        return desc.strip()
+
+    def clean_offer_percentage(self):
+        offer = self.cleaned_data.get('offer_percentage', 0)
+        if offer < 0 or offer > 100:
+            raise forms.ValidationError("Offer must be between 0 and 100%.")
+        return offer
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Filter out deleted categories from parent field
+        self.fields['parent'].queryset = Category.objects.filter(
+            is_deleted=False)
 
 
 class ProductForm(forms.ModelForm):

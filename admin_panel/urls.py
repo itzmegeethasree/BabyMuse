@@ -19,6 +19,25 @@ urlpatterns = [
     path('change-password/', views.change_admin_password,
          name='admin_change_password'),
 
+
+    # Customer management
+    path('customers/', views.admin_customer_list, name='admin_customer_list'),
+    path('customers/<int:customer_id>/',
+         views.admin_view_customer, name='admin_view_customer'),
+    path('users/<int:user_id>/toggle/',
+         toggle_user_status, name='toggle_user_status'),
+
+    # Categories
+    path('categories/', views.category_list, name='category_list'),
+    path('categories/add/', views.add_category, name='add_category'),
+    path('categories/<int:pk>/edit/', views.edit_category, name='edit_category'),
+    path('categories/<int:pk>/delete/',
+         views.delete_category, name='delete_category'),
+
+
+
+
+
     # # Orders
     # path('orders/', views.admin_orders, name='admin_orders'),
     # path('orders/<int:order_id>/', views.admin_order_detail,
@@ -39,21 +58,6 @@ urlpatterns = [
     #      views.admin_edit_product, name='admin_edit_product'),
     # path('products/<int:product_id>/toggle/',
     #      views.admin_toggle_product_visibility, name='admin_toggle_product'),
-
-    # # Categories
-    # path('categories/', views.category_list, name='admin_category_list'),
-    # path('categories/add/', views.add_category, name='admin_add_category'),
-    # path('categories/edit/<int:category_id>/',
-    #      views.edit_category, name='admin_edit_category'),
-    # path('categories/delete/<int:category_id>/',
-    #      views.delete_category, name='admin_delete_category'),
-
-    # # Customers
-    # path('customers/', views.admin_customer_list, name='admin_customer_list'),
-    # path('customers/<int:customer_id>/',
-    #      views.admin_view_customer, name='admin_view_customer'),
-    # path('users/<int:user_id>/toggle/',
-    #      toggle_user_status, name='toggle_user_status'),
 
     # # coupons
     # path('coupons/', views.coupon_list, name='admin-coupon-list'),
