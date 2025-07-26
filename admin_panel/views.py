@@ -1,7 +1,9 @@
+import json
+from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import get_user_model
 
-from .forms import CategoryForm
-from shop.models import Category
+from .forms import CategoryForm, MultiFileUploadForm, ProductForm, ProductVariantForm, ProductVariantFormSet
+from shop.models import Category, Product, ProductImage, ProductVariant
 from .models import AdminUser
 from django.contrib.auth.hashers import check_password, make_password
 from django.shortcuts import render, redirect, get_object_or_404
@@ -14,6 +16,8 @@ from .decorators import admin_login_required
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
 from django.db.models import Sum, Q
+import base64
+from django.core.files.base import ContentFile
 
 
 # from orders.models import Order, ORDER_STATUS, OrderItem, ReturnRequest
@@ -140,6 +144,43 @@ def change_admin_password(request):
     return render(request, 'admin_panel/change_password.html')
 
 
+# customer management
+
+
+@admin_login_required
+def admin_customer_list(request):
+    query = request.GET.get('q', '')
+    customers = User.objects.filter(is_staff=False).order_by('-date_joined')
+    if query:
+        customers = customers.filter(Q(username__icontains=query) | Q(
+            email__icontains=query) | Q(phone__icontains=query))
+    paginator = Paginator(customers, 10)
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+    return render(request, 'admin_panel/customer_list.html', {'page_obj': page_obj, 'query': query, 'customers': customers})
+
+
+@admin_login_required
+def admin_view_customer(request, customer_id):
+    customer = get_object_or_404(User, id=customer_id, is_staff=False)
+    return render(request, 'admin_panel/view_customer.html', {'customer': customer})
+
+
+def custom_admin_logout(request):
+    request.session.flush()
+    return redirect('admin_panel:custom_admin_login')
+
+
+@require_POST
+def toggle_user_status(request, user_id):
+    user = get_object_or_404(User, id=user_id)
+    user.is_active = not user.is_active
+    user.save()
+    status = "unblocked" if user.is_active else "blocked"
+    messages.success(request, f"User {user.username} has been {status}.")
+    return redirect('admin_panel:admin_customer_list')
+
+
 # category management/
 @admin_login_required
 def category_list(request):
@@ -191,6 +232,104 @@ def delete_category(request, pk):
     category.save()
     messages.success(request, "Category deleted.")
     return redirect('admin_panel:category_list')
+# product management
+
+
+@admin_login_required
+def admin_products(request):
+    search_query = request.GET.get('search', '').strip()
+    category_id = request.GET.get('category', '')
+
+    products = Product.objects.all()
+    if search_query:
+        products = products.filter(
+            Q(name__icontains=search_query) |
+            Q(category__name__icontains=search_query) |
+            Q(gender__icontains=search_query)
+        )
+
+    # Apply category filter
+    if category_id:
+        products = products.filter(category__id=category_id)
+
+    products = products.order_by('-created_at')
+
+    # Pagination
+    paginator = Paginator(products, 10)  # 10 per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
+    # All categories for dropdown
+    categories = Category.objects.filter(is_deleted=False)
+
+    return render(request, 'admin_panel/products.html', {
+        'page_obj': page_obj,
+        'categories': categories,
+        'search_query': search_query,
+        'selected_category': category_id,
+    })
+
+
+@admin_login_required
+def admin_add_product(request):
+    if request.method == 'POST':
+        product_form = ProductForm(request.POST)
+        image_form = MultiFileUploadForm(request.POST, request.FILES)
+
+        if product_form.is_valid():
+            product = product_form.save(commit=False)
+            variant_formset = ProductVariantFormSet(
+                request.POST, instance=product)
+
+            # Load cropped image data (base64) from hidden input
+            cropped_images_data = request.POST.get('cropped_images_data')
+            if cropped_images_data:
+                cropped_images = json.loads(cropped_images_data)
+                for idx, data_url in enumerate(cropped_images):
+                    format, imgstr = data_url.split(';base64,')
+                    ext = format.split('/')[-1]
+                    image_data = ContentFile(base64.b64decode(
+                        imgstr), name=f"product_image_{idx}.{ext}")
+
+            if variant_formset.is_valid():
+                if len(image_data) < 3:
+                    messages.error(
+                        request, "Please crop and upload at least 3 images.")
+                else:
+                    product.save()
+
+                    # Handle cropped image saving
+                    handle_cropped_images(product, image_data)
+
+                    # Save variants
+                    variant_formset.save()
+
+                    messages.success(request, "Product added successfully.")
+                    return redirect('admin_panel:product_list')
+            else:
+                messages.error(request, "Please correct the variant errors.")
+        else:
+            messages.error(request, "Please correct the product form errors.")
+    else:
+        product_form = ProductForm()
+        image_form = MultiFileUploadForm()
+        variant_formset = ProductVariantFormSet(instance=Product())
+
+    return render(request, 'admin_panel/add_product.html', {
+        'product_form': product_form,
+        'image_form': image_form,
+        'variant_formset': variant_formset,
+        'title': "Add New Product"
+    })
+
+
+def handle_cropped_images(product_instance, cropped_data_list):
+    for i, img_data in enumerate(cropped_data_list):
+        format, imgstr = img_data.split(';base64,')
+        ext = format.split('/')[-1]
+        image_file = ContentFile(base64.b64decode(
+            imgstr), name=f"product_{product_instance.id}_{i}.{ext}")
+        ProductImage.objects.create(product=product_instance, image=image_file)
 
 
 # order management
@@ -350,116 +489,6 @@ def admin_return_requests(request):
 # product management
 
 
-@admin_login_required
-def admin_products(request):
-    search_query = request.GET.get('search', '').strip()
-    category_id = request.GET.get('category', '')
-
-    products = Product.objects.all()
-    if search_query:
-        products = products.filter(
-            Q(name__icontains=search_query) |
-            Q(category__name__icontains=search_query) |
-            Q(gender__icontains=search_query)
-        )
-
-    # Apply category filter
-    if category_id:
-        products = products.filter(category__id=category_id)
-
-    products = products.order_by('-created_at')
-
-    # Pagination
-    paginator = Paginator(products, 10)  # 10 per page
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-
-    # All categories for dropdown
-    categories = Category.objects.filter(is_deleted=False)
-
-    return render(request, 'admin_panel/products.html', {
-        'page_obj': page_obj,
-        'categories': categories,
-        'search_query': search_query,
-        'selected_category': category_id,
-    })
-
-
-@admin_login_required
-def admin_add_product(request):
-    categories = Category.objects.filter(is_deleted=False)
-
-    if request.method == 'POST':
-        name = request.POST.get('name', '').strip()
-        category_id = request.POST.get('category')
-        description = request.POST.get('description', '').strip()
-        price = request.POST.get('price')
-        stock = request.POST.get('stock')
-        status = request.POST.get('status', 'Active')
-        min_age = request.POST.get('min_age')
-        max_age = request.POST.get('max_age')
-        gender = request.POST.get('gender', 'Unisex')
-        images = request.FILES.getlist('images')
-
-        # Validation
-        errors = []
-        if not name:
-            errors.append("Product name is required.")
-        if not category_id:
-            errors.append("Category is required.")
-        if not description:
-            errors.append("Description is required.")
-        if not price or not price.replace('.', '', 1).isdigit() or float(price) < 0:
-            errors.append("Valid price is required.")
-        if not stock or not stock.isdigit() or int(stock) < 0:
-            errors.append("Valid stock is required.")
-        if min_age and (not min_age.isdigit() or not (0 <= int(min_age) <= 36)):
-            errors.append("Min age must be between 0 and 36 months.")
-        if max_age and (not max_age.isdigit() or not (0 <= int(max_age) <= 36)):
-            errors.append("Max age must be between 0 and 36 months.")
-        if min_age and max_age and int(min_age) > int(max_age):
-            errors.append("Min age cannot be greater than max age.")
-        if gender not in ['Male', 'Female', 'Unisex']:
-            errors.append("Invalid gender selected.")
-        if len(images) != 3:
-            errors.append("Please upload exactly 3 cropped images.")
-
-        # Check category exists
-        try:
-            category = Category.objects.get(id=category_id)
-        except (Category.DoesNotExist, ValueError, TypeError):
-            errors.append("Invalid category selected.")
-
-        if errors:
-            for error in errors:
-                messages.error(request, error)
-            return render(request, 'admin_panel/add_product.html', {
-                'categories': categories
-            })
-
-        # Create product
-        product = Product.objects.create(
-            name=name,
-            category=category,
-            description=description,
-            price=price,
-            stock=stock,
-            status=status,
-            min_age=min_age or None,
-            max_age=max_age or None,
-            gender=gender,
-        )
-
-        # Save product images
-        for image_file in images:
-            ProductImage.objects.create(product=product, image=image_file)
-
-        messages.success(request, "Product added successfully!")
-        return redirect('admin_panel:admin_products')
-
-    return render(request, 'admin_panel/add_product.html', {'categories': categories})
-
-
 def process_image(image_file):
     try:
         # Open the uploaded image
@@ -567,41 +596,6 @@ def admin_toggle_product_visibility(request, product_id):
     messages.success(request, f"Product successfully {status}.")
     return redirect('admin_panel:admin_products')
 
-# customer management
-
-
-@admin_login_required
-def admin_customer_list(request):
-    query = request.GET.get('q', '')
-    customers = User.objects.filter(is_staff=False).order_by('-date_joined')
-    if query:
-        customers = customers.filter(Q(username__icontains=query) | Q(
-            email__icontains=query) | Q(phone__icontains=query))
-    paginator = Paginator(customers, 10)
-    page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    return render(request, 'admin_panel/customer_list.html', {'page_obj': page_obj, 'query': query, 'customers': customers})
-
-
-@admin_login_required
-def admin_view_customer(request, customer_id):
-    customer = get_object_or_404(User, id=customer_id, is_staff=False)
-    return render(request, 'admin_panel/view_customer.html', {'customer': customer})
-
-
-def custom_admin_logout(request):
-    request.session.flush()
-    return redirect('admin_panel:custom_admin_login')
-
-
-@require_POST
-def toggle_user_status(request, user_id):
-    user = get_object_or_404(User, id=user_id)
-    user.is_active = not user.is_active
-    user.save()
-    status = "unblocked" if user.is_active else "blocked"
-    messages.success(request, f"User {user.username} has been {status}.")
-    return redirect('admin_panel:admin_customer_list')
 # coupon management
 
 

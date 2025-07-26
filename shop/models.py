@@ -65,6 +65,8 @@ class Product(models.Model):
     product_offer_percentage = models.PositiveIntegerField(
         default=0)
     views = models.PositiveIntegerField(default=0)
+    is_featured = models.BooleanField(default=False)
+    is_listed = models.BooleanField(default=True)
 
     def get_offer_price(self):
         product_offer = self.product_offer_percentage

@@ -51,9 +51,9 @@ urlpatterns = [
     #      views.verify_return_request, name='verify_return_request'),
 
 
-    # # Products
-    # path('products/', views.admin_products, name='admin_products'),
-    # path('products/new/', views.admin_add_product, name='admin_add_product'),
+    # Products
+    path('products/', views.admin_products, name='admin_products'),
+    path('products/new/', views.admin_add_product, name='admin_add_product'),
     # path('products/<int:product_id>/edit/',
     #      views.admin_edit_product, name='admin_edit_product'),
     # path('products/<int:product_id>/toggle/',

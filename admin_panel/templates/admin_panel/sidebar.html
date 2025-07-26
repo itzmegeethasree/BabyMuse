@@ -3,8 +3,8 @@
   <ul class="space-y-4">
     <li><a href="{% url 'admin_panel:admin_dashboard' %}" class="hover:text-pink-500">Dashboard</a></li>
     <li><a href="" class="hover:text-pink-500">Orders</a></li>
-    <li><a href="">Products</a></li>
-    <li><a href="">Customers</a></li>
+    <li><a href="{% url 'admin_panel:admin_products' %}">Products</a></li>
+    <li><a href="{% url 'admin_panel:admin_customer_list' %}">Customers</a></li>
     <li><a href="">Coupons</a></li>
     <li><a href="{% url 'admin_panel:category_list' %}">Categories</a></li>
     <li><a href="">Refund/Return</a></li>

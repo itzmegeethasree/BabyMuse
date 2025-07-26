@@ -1,5 +1,6 @@
+from django.forms import inlineformset_factory, modelformset_factory
+from shop.models import Product, ProductImage, ProductVariant, Category, VariantOption
 from django import forms
-from shop.models import Category, Product
 from .widgets import MultiFileInput
 from orders.models import Coupon
 import re
@@ -46,23 +47,57 @@ class CategoryForm(forms.ModelForm):
 
 
 class ProductForm(forms.ModelForm):
-    images = forms.FileField(
-        widget=MultiFileInput(attrs={'multiple': True}),
-        required=True,
-        label="Product Images"
-    )
-
     class Meta:
         model = Product
-        fields = ['name', 'category', 'description',
-                  'price', 'stock', 'status']
+        fields = [
+            'name', 'category', 'brand', 'description',
+            'price', 'stock', 'min_age', 'max_age', 'gender',
+            'is_featured', 'is_listed', 'status', 'product_offer_percentage'
+        ]
+        widgets = {
+            'description': forms.Textarea(attrs={'rows': 4}),
+        }
+
+    def clean_name(self):
+        name = self.cleaned_data.get('name')
+        if not name.replace(" ", "").isalpha():
+            raise forms.ValidationError(
+                "Product name must only contain letters and spaces.")
+        return name
+
+
+class MultiFileUploadForm(forms.Form):
+    images = forms.FileField(
+        widget=MultiFileInput,
+        required=True
+    )
 
     def clean_images(self):
-        images = self.files.getlist('images')
-        if len(images) != 3:
-            raise forms.ValidationError("Please upload exactly 3 images.")
-        return images
+        files = self.files.getlist('images')
+        if len(files) < 3:
+            raise forms.ValidationError("Please upload at least 3 images.")
+        return files
 
+
+class ProductVariantForm(forms.ModelForm):
+    options = forms.ModelMultipleChoiceField(
+        queryset=VariantOption.objects.all(),
+        widget=forms.CheckboxSelectMultiple,
+        required=True
+    )
+    
+
+    class Meta:
+        model = ProductVariant
+        fields = ['options', 'sku', 'price', 'stock']
+
+ProductVariantFormSet = inlineformset_factory(
+    parent_model=Product,
+    model=ProductVariant,
+    form=ProductVariantForm,
+    extra=1,
+    can_delete=True
+)
 
 class CouponForm(forms.ModelForm):
     class Meta:
