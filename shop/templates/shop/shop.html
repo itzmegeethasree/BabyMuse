@@ -73,7 +73,8 @@
             <span class="text-gray-500 line-through text-sm">₹{{ product.price|floatformat:0 }}</span>
           </div>
           {% else %}
-          <p class="text-pink-600 font-bold mt-2 text-lg">₹{{ product.price|floatformat:0 }}</p>
+          <p class="text-pink-600 font-bold mt-2 text-lg">₹{{ product.min_variant_price|floatformat:0 }}</p>
+
           {% endif %}
           {% endwith %}
 

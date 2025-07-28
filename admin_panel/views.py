@@ -1,9 +1,11 @@
+from .forms import ProductForm, ProductOfferForm, VariantComboForm, CategoryOfferForm
+from django.utils.text import slugify
 import json
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import get_user_model
 
-from .forms import CategoryForm, MultiFileUploadForm, ProductForm, ProductVariantForm, ProductVariantFormSet
-from shop.models import Category, Product, ProductImage, ProductVariant
+from .forms import CategoryForm, ProductForm, VariantComboForm
+from shop.models import Category, Product, ProductImage, ProductVariant, VariantOption, VariantAttribute
 from .models import AdminUser
 from django.contrib.auth.hashers import check_password, make_password
 from django.shortcuts import render, redirect, get_object_or_404
@@ -15,7 +17,7 @@ from django.conf import settings
 from .decorators import admin_login_required
 from django.views.decorators.http import require_POST
 from django.core.paginator import Paginator
-from django.db.models import Sum, Q
+from django.db.models import Sum, Q, Prefetch
 import base64
 from django.core.files.base import ContentFile
 
@@ -241,6 +243,8 @@ def admin_products(request):
     category_id = request.GET.get('category', '')
 
     products = Product.objects.all()
+
+    # Apply search filter
     if search_query:
         products = products.filter(
             Q(name__icontains=search_query) |
@@ -252,7 +256,10 @@ def admin_products(request):
     if category_id:
         products = products.filter(category__id=category_id)
 
-    products = products.order_by('-created_at')
+    # Optimize DB hits
+    products = products.select_related('category').prefetch_related(
+        Prefetch('variants', queryset=ProductVariant.objects.only('stock'))
+    ).order_by('-created_at')
 
     # Pagination
     paginator = Paginator(products, 10)  # 10 per page
@@ -270,67 +277,214 @@ def admin_products(request):
     })
 
 
-@admin_login_required
-def admin_add_product(request):
-    if request.method == 'POST':
-        product_form = ProductForm(request.POST)
-        image_form = MultiFileUploadForm(request.POST, request.FILES)
+def parse_variants_from_post(post_data):
+    rows = {}
+    for key in post_data:
+        if key.startswith("variants["):
+            row = key.split('[')[1].split(']')[0]
+            field = key.split('[')[2].split(']')[0]
+            rows.setdefault(row, {})[field] = post_data[key]
+    return list(rows.values())
 
-        if product_form.is_valid():
-            product = product_form.save(commit=False)
-            variant_formset = ProductVariantFormSet(
-                request.POST, instance=product)
 
-            # Load cropped image data (base64) from hidden input
-            cropped_images_data = request.POST.get('cropped_images_data')
-            if cropped_images_data:
-                cropped_images = json.loads(cropped_images_data)
-                for idx, data_url in enumerate(cropped_images):
-                    format, imgstr = data_url.split(';base64,')
-                    ext = format.split('/')[-1]
-                    image_data = ContentFile(base64.b64decode(
-                        imgstr), name=f"product_image_{idx}.{ext}")
+def save_product_and_variants(request, product, is_edit, size_qs, color_qs):
+    form = ProductForm(request.POST, instance=product)
+    cropped_images_data = request.POST.get('cropped_images_data')
+    new_images = json.loads(cropped_images_data) if cropped_images_data else []
 
-            if variant_formset.is_valid():
-                if len(image_data) < 3:
-                    messages.error(
-                        request, "Please crop and upload at least 3 images.")
-                else:
-                    product.save()
+    variant_data = parse_variants_from_post(request.POST)
+    variant_forms = [
+        VariantComboForm(data=row, initial={'product_name': request.POST.get(
+            'name', '')}, size_qs=size_qs, color_qs=color_qs)
+        for row in variant_data
+    ]
 
-                    # Handle cropped image saving
-                    handle_cropped_images(product, image_data)
+    if form.is_valid() and all(f.is_valid() for f in variant_forms):
+        if not is_edit and len(new_images) < 3:
+            messages.error(
+                request, "Please crop and upload at least 3 images.")
+            return None, form, variant_forms
 
-                    # Save variants
-                    variant_formset.save()
+        product = form.save()
 
-                    messages.success(request, "Product added successfully.")
-                    return redirect('admin_panel:product_list')
-            else:
-                messages.error(request, "Please correct the variant errors.")
-        else:
-            messages.error(request, "Please correct the product form errors.")
+        if new_images:
+            if is_edit:
+                product.images.all().delete()
+            handle_cropped_images(product, new_images)
+
+        seen = set()
+        for form in variant_forms:
+            size = form.cleaned_data['size']
+            color = form.cleaned_data['color']
+            sku = form.cleaned_data['sku']
+            price = form.cleaned_data['price']
+            stock = form.cleaned_data['stock']
+            key = f"{size.id}-{color.id}"
+
+            if key in seen:
+                continue
+            seen.add(key)
+
+            if ProductVariant.objects.filter(sku=sku).exists():
+                base_sku = sku
+                count = 1
+                while ProductVariant.objects.filter(sku=f"{base_sku}-{count}").exists():
+                    count += 1
+                sku = f"{base_sku}-{count}"
+
+            variant = ProductVariant.objects.create(
+                product=product, sku=sku, price=price, stock=stock)
+            variant.options.set([size, color])
+
+        return product, None, None
     else:
-        product_form = ProductForm()
-        image_form = MultiFileUploadForm()
-        variant_formset = ProductVariantFormSet(instance=Product())
+        return None, form, variant_forms
+
+
+@admin_login_required
+def admin_product_add(request):
+    size_attr = VariantAttribute.objects.get(name__iexact='Size')
+    color_attr = VariantAttribute.objects.get(name__iexact='Color')
+    size_qs, color_qs = size_attr.options.all(), color_attr.options.all()
+
+    if request.method == 'POST':
+        product, errors_form, errors_variants = save_product_and_variants(
+            request, None, False, size_qs, color_qs)
+        if product:
+            messages.success(request, "Product added successfully.")
+            return redirect('admin_panel:admin_products')
+        messages.error(request, "Please correct the errors below.")
+        return render(request, 'admin_panel/add_product.html', {
+            'product_form': errors_form,
+            'size_options': size_qs,
+            'color_options': color_qs,
+        })
 
     return render(request, 'admin_panel/add_product.html', {
-        'product_form': product_form,
-        'image_form': image_form,
-        'variant_formset': variant_formset,
-        'title': "Add New Product"
+        'product_form': ProductForm(),
+        'size_options': size_qs,
+        'color_options': color_qs,
     })
 
 
-def handle_cropped_images(product_instance, cropped_data_list):
+@admin_login_required
+def admin_product_edit(request, product_id):
+    product = get_object_or_404(Product, pk=product_id)
+    size_attr = VariantAttribute.objects.get(name__iexact='Size')
+    color_attr = VariantAttribute.objects.get(name__iexact='Color')
+    size_qs = size_attr.options.all()
+    color_qs = color_attr.options.all()
+
+    if request.method == 'POST':
+        product_form = ProductForm(
+            request.POST, request.FILES, instance=product)
+
+        if product_form.is_valid():
+            product = product_form.save()
+
+            existing_variant_ids = []
+            total = int(request.POST.get('variant-count', 0))
+
+            for i in range(total):
+                vid = request.POST.get(f'variants[{i}][id]', '')
+                size_id = request.POST.get(f'variants[{i}][size]')
+                color_id = request.POST.get(f'variants[{i}][color]')
+                sku = request.POST.get(f'variants[{i}][sku]')
+                price = request.POST.get(f'variants[{i}][price]')
+                stock = request.POST.get(f'variants[{i}][stock]')
+
+                # Skip if required fields are missing
+                if not (size_id and color_id and sku and price and stock):
+                    continue
+
+                try:
+                    size_option = VariantOption.objects.get(id=size_id)
+                    color_option = VariantOption.objects.get(id=color_id)
+                except VariantOption.DoesNotExist:
+                    continue
+
+                # Convert vid safely
+                vid_int = int(vid) if vid and vid.isdigit() else None
+
+                # Check for SKU uniqueness (excluding the current variant if editing)
+                existing_sku_variant = ProductVariant.objects.filter(sku=sku)
+                if vid_int:
+                    existing_sku_variant = existing_sku_variant.exclude(
+                        id=vid_int)
+                if existing_sku_variant.exists():
+                    messages.error(request, f"SKU '{sku}' is already in use.")
+                    continue
+
+                if vid_int:
+                    # Update existing variant
+                    variant = ProductVariant.objects.filter(
+                        id=vid_int, product=product).first()
+                    if variant:
+                        variant.sku = sku
+                        variant.price = price
+                        variant.stock = stock
+                        variant.save()
+                        variant.options.set([size_option, color_option])
+                        existing_variant_ids.append(variant.id)
+                else:
+                    # Create new variant
+                    variant = ProductVariant.objects.create(
+                        product=product,
+                        sku=sku,
+                        price=price,
+                        stock=stock,
+                    )
+                    variant.options.set([size_option, color_option])
+                    existing_variant_ids.append(variant.id)
+
+            # Delete removed variants
+            ProductVariant.objects.filter(product=product).exclude(
+                id__in=existing_variant_ids).delete()
+
+            messages.success(request, "Product updated successfully.")
+            return redirect('admin_panel:admin_products')
+        else:
+            messages.error(request, "Please correct the form errors.")
+            existing_variants = get_existing_variant_data(product)
+
+    else:
+        product_form = ProductForm(instance=product)
+        existing_variants = get_existing_variant_data(product)
+
+    return render(request, 'admin_panel/edit_product.html', {
+        'product_form': product_form,
+        'size_options': size_qs,
+        'color_options': color_qs,
+        'existing_images': product.images.all(),
+        'existingVariants': existing_variants,
+    })
+
+
+def get_existing_variant_data(product):
+    variants = []
+    for variant in product.variants.all():
+        size = variant.options.filter(attribute__name='Size').first()
+        color = variant.options.filter(attribute__name='Color').first()
+        if size and color:
+            variants.append({
+                'size_id': size.id,
+                'size_label': size.value,
+                'color_id': color.id,
+                'color_label': color.value,
+                'sku': variant.sku,
+                'price': float(variant.price),
+                'stock': variant.stock
+            })
+    return variants
+
+
+def handle_cropped_images(product, cropped_data_list):
     for i, img_data in enumerate(cropped_data_list):
         format, imgstr = img_data.split(';base64,')
         ext = format.split('/')[-1]
         image_file = ContentFile(base64.b64decode(
-            imgstr), name=f"product_{product_instance.id}_{i}.{ext}")
-        ProductImage.objects.create(product=product_instance, image=image_file)
-
+            imgstr), name=f"product_{product.id}_{i}.{ext}")
+        ProductImage.objects.create(product=product, image=image_file)
 
 # order management
 
@@ -487,24 +641,6 @@ def admin_return_requests(request):
     return render(request, 'admin_panel/return_request.html', {'return_requests': return_requests})
 
 # product management
-
-
-def process_image(image_file):
-    try:
-        # Open the uploaded image
-        img = Image.open(image_file)
-        img = img.convert('RGB')
-
-        img = img.resize((800, 800), Image.LANCZOS)
-
-        buffer = BytesIO()
-        img.save(fp=buffer, format='JPEG', quality=85)
-
-        return ContentFile(buffer.getvalue(), name=image_file.name)
-
-    except Exception as e:
-        print(f"Image processing error: {e}")
-        return None
 
 
 @admin_login_required

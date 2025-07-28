@@ -57,7 +57,6 @@ class Product(models.Model):
         'Brand', on_delete=models.SET_NULL, null=True, blank=True)
 
     price = models.DecimalField(max_digits=10, decimal_places=2)
-    stock = models.PositiveIntegerField()
     status = models.CharField(max_length=20, choices=[(
         'Active', 'Active'), ('Inactive', 'Inactive')], default='Active')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -83,6 +82,10 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def total_stock(self):
+        return sum(variant.stock for variant in self.variants.all())
 
     @property
     def primary_image(self):

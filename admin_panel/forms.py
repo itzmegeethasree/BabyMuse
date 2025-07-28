@@ -4,6 +4,7 @@ from django import forms
 from .widgets import MultiFileInput
 from orders.models import Coupon
 import re
+from django.utils.text import slugify
 
 
 class CategoryForm(forms.ModelForm):
@@ -50,8 +51,8 @@ class ProductForm(forms.ModelForm):
     class Meta:
         model = Product
         fields = [
-            'name', 'category', 'brand', 'description',
-            'price', 'stock', 'min_age', 'max_age', 'gender',
+            'name', 'category',  'description',
+            'price', 'min_age', 'max_age', 'gender',
             'is_featured', 'is_listed', 'status', 'product_offer_percentage'
         ]
         widgets = {
@@ -64,6 +65,18 @@ class ProductForm(forms.ModelForm):
             raise forms.ValidationError(
                 "Product name must only contain letters and spaces.")
         return name
+
+    def clean_min_age(self):
+        min_age = self.cleaned_data.get('min_age')
+        if min_age < 0 or min_age > 34:
+            raise forms.ValidationError("age must be between 0 and 34 months")
+        return min_age
+
+    def clean_max_age(self):
+        max_age = self.cleaned_data.get('min_age')
+        if max_age < 0 or max_age > 34:
+            raise forms.ValidationError("age must be between 0 and 34 months.")
+        return max_age
 
 
 class MultiFileUploadForm(forms.Form):
@@ -85,11 +98,11 @@ class ProductVariantForm(forms.ModelForm):
         widget=forms.CheckboxSelectMultiple,
         required=True
     )
-    
 
     class Meta:
         model = ProductVariant
         fields = ['options', 'sku', 'price', 'stock']
+
 
 ProductVariantFormSet = inlineformset_factory(
     parent_model=Product,
@@ -98,6 +111,47 @@ ProductVariantFormSet = inlineformset_factory(
     extra=1,
     can_delete=True
 )
+
+
+class VariantComboForm(forms.Form):
+    size = forms.ModelChoiceField(queryset=VariantOption.objects.none())
+    color = forms.ModelChoiceField(queryset=VariantOption.objects.none())
+    sku = forms.CharField(required=False)
+    price = forms.DecimalField()
+    stock = forms.IntegerField()
+
+    def __init__(self, *args, **kwargs):
+        size_qs = kwargs.pop('size_qs', VariantOption.objects.none())
+        color_qs = kwargs.pop('color_qs', VariantOption.objects.none())
+        super().__init__(*args, **kwargs)
+        self.fields['size'].queryset = size_qs
+        self.fields['color'].queryset = color_qs
+
+    def clean(self):
+        cleaned = super().clean()
+        size = cleaned.get('size')
+        color = cleaned.get('color')
+        sku = cleaned.get('sku')
+        name = self.initial.get('product_name', '')
+        if not sku:
+            base = slugify(name)[:6]
+            sku = f"{base}-{size.value[:2].upper()}-{color.value[:2].upper()}"
+            cleaned['sku'] = sku
+        return cleaned
+
+
+class ProductOfferForm(forms.ModelForm):
+    class Meta:
+        model = Product
+        fields = ['name', 'category',
+                  'product_offer_percentage']
+
+
+class CategoryOfferForm(forms.ModelForm):
+    class Meta:
+        model = Category
+        fields = ['name',  'parent', 'offer_percentage']
+
 
 class CouponForm(forms.ModelForm):
     class Meta:

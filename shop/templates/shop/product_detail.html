@@ -1,26 +1,26 @@
 {% extends 'core/base.html' %}
+
 {% load static %}
+{% load cart_extras %}
+
 
 {% block content %}
 <div class="max-w-6xl mx-auto px-6 py-8 grid md:grid-cols-2 gap-8">
 
   <!-- Product Images -->
   <div>
-    <!-- Breadcrumb -->
     <nav class="mb-4 text-sm text-gray-500">
       <a href="{% url 'home' %}" class="hover:text-pink-600">Home</a> /
       <a href="{% url 'shop' %}" class="hover:text-pink-600">Shop</a> /
       <span class="text-pink-600 font-medium">{{ product.name }}</span>
     </nav>
 
-    <!-- Zoomable Main Image -->
     <div class="border rounded-lg overflow-hidden mb-4 relative">
       <img id="main-image" src="{{ images.0.image.url }}" alt="{{ product.name }}"
         class="w-full h-[400px] object-contain transition-transform duration-300 ease-in-out"
         onmousemove="zoomImage(event)" onmouseleave="resetZoom()" />
     </div>
 
-    <!-- Thumbnails -->
     <div class="flex gap-4">
       {% for image in images %}
       <img src="{{ image.image.url }}" alt="Thumb {{ forloop.counter }}"
@@ -34,65 +34,64 @@
   <div>
     <h1 class="text-3xl font-bold mb-2">{{ product.name }}</h1>
 
-    <!-- Rating -->
     <div class="flex items-center gap-2 mb-2">
       <div>
         {% for i in "12345" %}
         {% if avg_rating >= forloop.counter %}
         ⭐
-        {% elif avg_rating >= forloop.counter0|add:"0.5" %}
-        ⭐
-        {% else %}
-        ☆
-        {% endif %}
+        {% elif avg_rating >= forloop.counter0|add:"0.5" %}⭐
+        {% else %}☆{% endif %}
         {% endfor %}
       </div>
       <span class="text-gray-600 text-sm">({{ total_reviews }} reviews)</span>
     </div>
 
-    <!-- 🏷️ Price + Discount -->
+    <!-- Active Offer -->
     {% with offer=product.get_active_offer %}
     {% if offer.1 > 0 %}
-    <!-- Show active offer badge -->
     <div class="mb-2 inline-block bg-green-100 text-green-800 text-sm font-medium px-3 py-1 rounded">
       {{ offer.1 }}% OFF - {{ offer.0 }}
     </div>
-
-    <!-- Show offer price with original price -->
-    <div class="text-2xl text-pink-600 font-semibold">
-      ₹{{ product.get_offer_price|floatformat:0 }}
-      <del class="text-gray-500 text-lg ml-2">₹{{ product.price|floatformat:0 }}</del>
-    </div>
-    {% else %}
-    <!-- No offer available -->
-    <div class="text-2xl text-pink-600 font-semibold">₹{{ product.price|floatformat:0 }}</div>
     {% endif %}
     {% endwith %}
 
+    <!-- Variant Selection -->
+    <div class="mb-4">
+      <label class="block mb-1 font-medium">Choose Size</label>
+      <select id="variantSize">
+        {% for size in unique_sizes %}
+        <option value="{{ size }}">{{ size }}</option>
+        {% endfor %}
+      </select>
+
+    </div>
+
+    <div class="mb-4">
+      <label class="block mb-1 font-medium">Choose Color</label>
+      <select id="variantColor">
+        {% for color in unique_colors %}
+        <option value="{{ color }}">{{ color }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <!-- Dynamic Price Display -->
+    <div id="variantPrice" class="text-2xl text-pink-600 font-semibold mb-1">
+      ₹{{ product.get_offer_price|floatformat:0 }}
+    </div>
+
     <!-- Stock Info -->
-    {% if product.stock > 0 %}
-    <p class="mt-2 text-green-600">In Stock: {{ product.stock }}</p>
-    {% else %}
-    <p class="mt-2 text-red-500 font-semibold">Out of Stock</p>
-    {% endif %}
+    <p id="variantStock" class="text-green-600">Select variant to view stock</p>
 
-    <!-- Description -->
-    <p class="mt-4 text-gray-700 leading-relaxed">{{ product.description }}</p>
-
-    <!-- Action Buttons -->
-    {% if product.stock > 0 %}
+    <!-- Add to Cart -->
     <div class="flex gap-4 mt-6">
       <button id="add-to-cart-btn" class="bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700 transition"
         data-product-id="{{ product.id }}">🛒 Add to Cart</button>
-
       <button id="add-to-wishlist-btn" class="bg-pink-500 text-white px-5 py-2 rounded hover:bg-pink-600 transition"
         data-product-id="{{ product.id }}">❤️ Add to Wishlist</button>
     </div>
-    {% else %}
-    <div class="mt-6 p-4 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700">
-      ⚠️ This product is currently unavailable or sold out.
-    </div>
-    {% endif %}
+
+    <p class="mt-4 text-gray-700 leading-relaxed">{{ product.description }}</p>
   </div>
 </div>
 
@@ -101,8 +100,9 @@
   class="fixed top-5 right-5 px-4 py-2 rounded shadow hidden z-50 bg-green-100 text-green-800 border border-green-400">
 </div>
 
-<!-- Zoom + AJAX Logic -->
 <script>
+  window.variants = {{ variants | safe }};
+
   function changeMainImage(url) {
     const img = document.getElementById("main-image");
     img.src = url;
@@ -125,84 +125,88 @@
     img.style.transform = "scale(1)";
   }
 
-  function showToast(message, success = true) {
-    const toast = document.getElementById("toast");
-    toast.innerText = message;
-    toast.className = `fixed top-5 right-5 px-4 py-2 rounded shadow z-50 ${success ? 'bg-green-100 text-green-800 border-green-400' : 'bg-red-100 text-red-800 border-red-400'}`;
-    toast.classList.remove("hidden");
-    setTimeout(() => toast.classList.add("hidden"), 3000);
-  }
-  function updateCartCount(count) {
-    const el = document.getElementById("cart-count");
-    if (el) {
-      el.innerText = count;
-      if (count > 0) el.classList.remove("hidden");
-      else el.classList.add("hidden");
-    }
-  }
-  function updateWishlistCount(count) {
-    const el = document.getElementById("wish-count");
-    if (el) {
-      el.innerText = count;
-      if (count > 0) el.classList.remove("hidden");
-      else el.classList.add("hidden");
-    }
-  }
-
-
-
   document.addEventListener("DOMContentLoaded", function () {
     const cartBtn = document.getElementById("add-to-cart-btn");
     const wishlistBtn = document.getElementById("add-to-wishlist-btn");
 
-    if (cartBtn) {
-      cartBtn.addEventListener("click", function () {
-        const productId = this.dataset.productId;
-        fetch("{% url 'ajax_add_to_cart' %}", {
-          method: "POST",
-          headers: {
-            "X-CSRFToken": "{{ csrf_token }}",
-            "Content-Type": "application/x-www-form-urlencoded"
-          },
-          body: `product_id=${productId}`
-        })
-          .then(res => res.json())
-          .then(data => {
-            if (data.status === 'success') {
-              updateCartCount(data.cart_count);
+    const variantPrice = document.getElementById("variantPrice");
+    const variantStock = document.getElementById("variantStock");
+    const sizeSelect = document.getElementById("variantSize");
+    const colorSelect = document.getElementById("variantColor");
 
-              showToast("Added to cart!");
-              document.getElementById("cart-count").innerText = data.cart_count;
-            } else {
-              showToast(data.message || "Add to cart failed", false);
-            }
-          });
-      });
+    function updateVariantView() {
+      const selectedSize = document.getElementById("variantSize").value;
+      const selectedColor = document.getElementById("variantColor").value;
+
+      const selected = window.variants.find(v =>
+        v.size === selectedSize && v.color === selectedColor
+      );
+
+      if (variant) {
+        document.getElementById("variantPrice").textContent = `₹${variant.price}`;
+        document.getElementById("variantStock").textContent = variant.stock > 0 ? `In Stock: ${variant.stock}` : 'Out of Stock';
+      } else {
+        document.getElementById("variantPrice").textContent = "Unavailable";
+        document.getElementById("variantStock").textContent = "Out of Stock";
+      }
     }
+    sizeSelect.addEventListener('change', updateVariantView);
+    colorSelect.addEventListener('change', updateVariantView);
+    updateVariantView(); // init
 
-    if (wishlistBtn) {
-      wishlistBtn.addEventListener("click", function () {
-        const productId = this.dataset.productId;
-        fetch("{% url 'ajax_add_to_wishlist' %}", {
-          method: "POST",
-          headers: {
-            "X-CSRFToken": "{{ csrf_token }}",
-            "Content-Type": "application/x-www-form-urlencoded"
-          },
-          body: `product_id=${productId}`
-        })
-          .then(res => res.json())
-          .then(data => {
-            if (data.status === 'added') {
-              updateWishlistCount(data.wishlist_count);
+    document.addEventListener("DOMContentLoaded", function () {
+      const cartBtn = document.getElementById("add-to-cart-btn");
+      const wishlistBtn = document.getElementById("add-to-wishlist-btn");
 
-              showToast("Added to wishlist!");
-            } else {
-              showToast("Already in wishlist", false);
-            }
-          });
-      });
-    }
+      if (cartBtn) {
+        cartBtn.addEventListener("click", function () {
+          const productId = this.dataset.productId;
+          fetch("{% url 'ajax_add_to_cart' %}", {
+            method: "POST",
+            headers: {
+              "X-CSRFToken": "{{ csrf_token }}",
+              "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: `product_id=${productId}`
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (data.status === 'success') {
+                updateCartCount(data.cart_count);
+
+                showToast("Added to cart!");
+                document.getElementById("cart-count").innerText = data.cart_count;
+              } else {
+                showToast(data.message || "Add to cart failed", false);
+              }
+            });
+        });
+      }
+
+      if (wishlistBtn) {
+        wishlistBtn.addEventListener("click", function () {
+          const productId = this.dataset.productId;
+          fetch("{% url 'ajax_add_to_wishlist' %}", {
+            method: "POST",
+            headers: {
+              "X-CSRFToken": "{{ csrf_token }}",
+              "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: `product_id=${productId}`
+          })
+            .then(res => res.json())
+            .then(data => {
+              if (data.status === 'added') {
+                updateWishlistCount(data.wishlist_count);
+
+                showToast("Added to wishlist!");
+              } else {
+                showToast("Already in wishlist", false);
+              }
+            });
+        });
+      }
+    });
   });
 </script>
 {% endblock %}

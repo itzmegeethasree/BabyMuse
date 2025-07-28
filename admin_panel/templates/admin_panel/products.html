@@ -12,7 +12,7 @@
       <button type="submit" class="bg-blue-600 text-white px-4 py-1.5 rounded hover:bg-blue-700">Search</button>
     </form>
 
-    <a href="{% url 'admin_panel:admin_add_product' %}"
+    <a href="{% url 'admin_panel:admin_product_add' %}"
       class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">
       + Add Product
     </a>
@@ -24,7 +24,7 @@
         <th class="p-2">Image</th>
         <th class="p-2">Name</th>
         <th class="p-2">Category</th>
-        <th class="p-2">Price</th>
+        <th class="p-2">Varients</th>
         <th class="p-2">Stock</th>
         <th class="p-2">Status</th>
         <th class="p-2">Age Range</th>
@@ -40,8 +40,23 @@
         </td>
         <td class="p-2">{{ product.name }}</td>
         <td class="p-2">{{ product.category.name }}</td>
-        <td class="p-2">₹{{ product.price }}</td>
-        <td class="p-2">{{ product.stock }}</td>
+        <td class="p-2 text-xs">
+          {% for variant in product.variants.all %}
+          <div class="mb-1 border-l pl-2">
+            {% with variant.options.all as opts %}
+            {% for opt in opts %}
+            <span class="bg-gray-100 px-2 py-0.5 rounded text-xs">{{ opt.value }}</span>
+            {% endfor %}
+            {% endwith %}
+            <span class="text-gray-700 ml-2">
+              ₹{{ variant.price }}|Stock: {{ variant.stock }}
+            </span>
+          </div>
+          {% empty %}
+          <span class="text-gray-400">No variants</span>
+          {% endfor %}
+        </td>
+        <td class="p-2">{{ product.total_stock }}</td>
         <td class="p-2">
           {% if product.is_deleted %}
           <span class="text-red-500 font-semibold">Unlisted</span>
@@ -52,7 +67,7 @@
         <td class="p-2">{{ product.min_age }} - {{ product.max_age }} mo</td>
         <td class="p-2">{{ product.gender }}</td>
         <td class="p-2 space-x-2">
-          <a href="{% url 'admin_panel:admin_edit_product' product.id %}" class="text-blue-600 hover:underline">Edit</a>
+          <a href="{% url 'admin_panel:admin_product_edit' product.id %}" class="text-blue-600 hover:underline">Edit</a>
           |
           <a href="{% url 'admin_panel:admin_toggle_product' product.id %}" class="text-pink-600 hover:underline"
             onclick="return confirm('Are you sure you want to {% if product.is_deleted %}list{% else %}unlist{% endif %} this product?');">

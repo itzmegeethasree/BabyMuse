@@ -53,11 +53,11 @@ urlpatterns = [
 
     # Products
     path('products/', views.admin_products, name='admin_products'),
-    path('products/new/', views.admin_add_product, name='admin_add_product'),
-    # path('products/<int:product_id>/edit/',
-    #      views.admin_edit_product, name='admin_edit_product'),
-    # path('products/<int:product_id>/toggle/',
-    #      views.admin_toggle_product_visibility, name='admin_toggle_product'),
+    path('products/add/', views.admin_product_add, name='admin_product_add'),
+    path('products/<int:product_id>/edit/',
+         views.admin_product_edit, name='admin_product_edit'),
+    path('products/<int:product_id>/toggle/',
+         views.admin_toggle_product_visibility, name='admin_toggle_product'),
 
     # # coupons
     # path('coupons/', views.coupon_list, name='admin-coupon-list'),
@@ -69,9 +69,9 @@ urlpatterns = [
     #      views.coupon_delete, name='admin-coupon-delete'),
 
     # # offer
-    # path('product-offers/', views.product_offer_list, name='product_offer_list'),
-    # path('product-offers/<int:product_id>/update/',
-    #      views.update_product_offer, name='update_product_offer'),
+    path('product-offers/', views.product_offer_list, name='product_offer_list'),
+    path('product-offers/<int:product_id>/update/',
+         views.update_product_offer, name='update_product_offer'),
     # path('category-offers/', views.category_offer_list,
     #      name='category_offer_list'),
     # path('category-offers/<int:category_id>/update/',

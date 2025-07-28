@@ -182,7 +182,7 @@ def signup(request):
                     code=f"REF-{user.referred_by.id}-{uuid.uuid4().hex[:5].upper()}",
                     discount_amount=100,
                     valid_from=timezone.now(),
-                    valid_to=timezone.now() + timedelta(days=30),
+                    valid_to=timezone.now() + timedelta(days=5),
                     active=True,
                     user=user.referred_by
                 )

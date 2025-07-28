@@ -10,26 +10,42 @@ from django.db.models import Avg
 from .models import Product, Category, Wishlist, CartItem, Review
 
 
-def shop_view(request):
-    products = Product.objects.filter(status='Active').exclude(is_deleted=True)
+from django.db.models import Min, Q
 
+
+def shop_view(request):
     search_query = request.GET.get('search', '')
     category_id = request.GET.get('category', '')
     price_min = request.GET.get('price_min', '')
     price_max = request.GET.get('price_max', '')
     sort_by = request.GET.get('sort', '')
 
+    # Base queryset with only active, non-deleted products
+    products = Product.objects.filter(status='Active', is_deleted=False)
+
+    # Annotate with minimum variant price
+    products = products.annotate(min_variant_price=Min('variants__price'))
+
+    # Search by product name
     if search_query:
         products = products.filter(name__icontains=search_query)
+
+    # Filter by category
     if category_id:
         products = products.filter(category__id=category_id)
-    if price_min.isdigit() and price_max.isdigit():
-        products = products.filter(price__gte=price_min, price__lte=price_max)
 
+    # Filter by variant price range
+    if price_min.isdigit() and price_max.isdigit():
+        products = products.filter(
+            min_variant_price__gte=price_min,
+            min_variant_price__lte=price_max
+        )
+
+    # Sorting
     if sort_by == "price_low":
-        products = products.order_by('price')
+        products = products.order_by('min_variant_price')
     elif sort_by == "price_high":
-        products = products.order_by('-price')
+        products = products.order_by('-min_variant_price')
     elif sort_by == "name_asc":
         products = products.order_by('name')
     elif sort_by == "name_desc":
@@ -56,7 +72,8 @@ def shop_view(request):
 
 def product_detail(request, pk):
     try:
-        product = Product.objects.prefetch_related('images').get(pk=pk)
+        product = Product.objects.prefetch_related(
+            'images', 'variants__options__attribute').get(pk=pk)
 
         if product.status != 'Active':
             messages.error(request, "This product is currently unavailable.")
@@ -64,15 +81,29 @@ def product_detail(request, pk):
 
         reviews = Review.objects.filter(
             product=product).order_by('-created_at')
-
         avg_rating = reviews.aggregate(avg=Avg('rating'))['avg']
         total_reviews = reviews.count()
+
+        # Collect variants with size/color
+        variants = []
+        for variant in product.variants.all():
+            size = variant.options.filter(attribute__name='Size').first()
+            color = variant.options.filter(attribute__name='Color').first()
+            if size and color:
+                variants.append({
+                    'id': variant.id,
+                    'size': size.value,
+                    'color': color.value,
+                    'price': float(variant.price),
+                    'stock': variant.stock
+                })
 
         context = {
             'product': product,
             'images': product.images.all(),
+            'variants': variants,
             'reviews': reviews,
-            'avg_rating': round(avg_rating, 1) if avg_rating is not None else 0,
+            'avg_rating': round(avg_rating, 1) if avg_rating else 0,
             'review_count': total_reviews,
         }
         return render(request, 'shop/product_detail.html', context)
@@ -147,7 +178,7 @@ def ajax_add_to_cart(request):
             return JsonResponse({'status': 'error', 'message': 'Stock limit reached'})
         cart_item.quantity += 1
         cart_item.save()
-    
+
     cart_count = CartItem.objects.filter(user=request.user).count()
     return JsonResponse({'status': 'success', 'cart_count': cart_count})
 
