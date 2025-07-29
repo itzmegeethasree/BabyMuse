@@ -114,99 +114,134 @@
     const rect = img.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    const xPercent = x / rect.width * 100;
-    const yPercent = y / rect.height * 100;
+    const xPercent = (x / rect.width) * 100;
+    const yPercent = (y / rect.height) * 100;
     img.style.transformOrigin = `${xPercent}% ${yPercent}%`;
     img.style.transform = "scale(2)";
   }
 
   function resetZoom() {
-    const img = document.getElementById("main-image");
-    img.style.transform = "scale(1)";
+    document.getElementById("main-image").style.transform = "scale(1)";
+  }
+
+  function getSelectedVariant() {
+    const size = document.getElementById("variantSize").value;
+    const color = document.getElementById("variantColor").value;
+    return window.variants.find(v => v.size === size && v.color === color);
+  }
+
+  function updateVariantView() {
+    const selected = getSelectedVariant();
+    const priceEl = document.getElementById("variantPrice");
+    const stockEl = document.getElementById("variantStock");
+    const cartBtn = document.getElementById("add-to-cart-btn");
+
+    if (selected) {
+      priceEl.textContent = `₹${selected.price}`;
+      stockEl.textContent = selected.stock > 0 ? `In Stock: ${selected.stock}` : "Out of Stock";
+      stockEl.className = selected.stock > 0 ? "text-green-600" : "text-red-600";
+      cartBtn.disabled = selected.stock <= 0;
+    } else {
+      priceEl.textContent = "Unavailable";
+      stockEl.textContent = "Out of Stock";
+      stockEl.className = "text-red-600";
+      cartBtn.disabled = true;
+    }
+  }
+
+  function updateCartCount(count) {
+    const el = document.getElementById("cart-count");
+    if (el) {
+      el.innerText = count;
+      count > 0 ? el.classList.remove("hidden") : el.classList.add("hidden");
+    }
+  }
+
+  function updateWishlistCount(count) {
+    const el = document.getElementById("wish-count");
+    if (el) {
+      el.innerText = count;
+      count > 0 ? el.classList.remove("hidden") : el.classList.add("hidden");
+    }
+  }
+
+  function showToast(message, success = true) {
+    const toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.className = `fixed top-5 right-5 px-4 py-2 rounded shadow z-50 ${success
+      ? "bg-green-100 text-green-800 border-green-400"
+      : "bg-red-100 text-red-800 border-red-400"
+      }`;
+    toast.classList.remove("hidden");
+    setTimeout(() => toast.classList.add("hidden"), 3000);
   }
 
   document.addEventListener("DOMContentLoaded", function () {
     const cartBtn = document.getElementById("add-to-cart-btn");
     const wishlistBtn = document.getElementById("add-to-wishlist-btn");
-
-    const variantPrice = document.getElementById("variantPrice");
-    const variantStock = document.getElementById("variantStock");
     const sizeSelect = document.getElementById("variantSize");
     const colorSelect = document.getElementById("variantColor");
 
-    function updateVariantView() {
-      const selectedSize = document.getElementById("variantSize").value;
-      const selectedColor = document.getElementById("variantColor").value;
+    sizeSelect.addEventListener("change", updateVariantView);
+    colorSelect.addEventListener("change", updateVariantView);
+    updateVariantView();
 
-      const selected = window.variants.find(v =>
-        v.size === selectedSize && v.color === selectedColor
-      );
+    if (cartBtn) {
+      cartBtn.addEventListener("click", function () {
+        const selected = getSelectedVariant();
+        if (!selected) {
+          showToast("Please select a valid variant", false);
+          return;
+        }
 
-      if (variant) {
-        document.getElementById("variantPrice").textContent = `₹${variant.price}`;
-        document.getElementById("variantStock").textContent = variant.stock > 0 ? `In Stock: ${variant.stock}` : 'Out of Stock';
-      } else {
-        document.getElementById("variantPrice").textContent = "Unavailable";
-        document.getElementById("variantStock").textContent = "Out of Stock";
-      }
+        fetch("{% url 'ajax_add_to_cart' %}", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": "{{ csrf_token }}",
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: `variant_id=${selected.id}`
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.status === "success") {
+              updateCartCount(data.cart_count);
+              showToast("Added to cart!");
+            } else {
+              showToast(data.message || "Add to cart failed", false);
+            }
+          });
+      });
     }
-    sizeSelect.addEventListener('change', updateVariantView);
-    colorSelect.addEventListener('change', updateVariantView);
-    updateVariantView(); // init
 
-    document.addEventListener("DOMContentLoaded", function () {
-      const cartBtn = document.getElementById("add-to-cart-btn");
-      const wishlistBtn = document.getElementById("add-to-wishlist-btn");
+    if (wishlistBtn) {
+      wishlistBtn.addEventListener("click", function () {
+        const selected = getSelectedVariant();
+        if (!selected) {
+          showToast("Please select a valid variant", false);
+          return;
+        }
 
-      if (cartBtn) {
-        cartBtn.addEventListener("click", function () {
-          const productId = this.dataset.productId;
-          fetch("{% url 'ajax_add_to_cart' %}", {
-            method: "POST",
-            headers: {
-              "X-CSRFToken": "{{ csrf_token }}",
-              "Content-Type": "application/x-www-form-urlencoded"
-            },
-            body: `product_id=${productId}`
-          })
-            .then(res => res.json())
-            .then(data => {
-              if (data.status === 'success') {
-                updateCartCount(data.cart_count);
-
-                showToast("Added to cart!");
-                document.getElementById("cart-count").innerText = data.cart_count;
-              } else {
-                showToast(data.message || "Add to cart failed", false);
-              }
-            });
-        });
-      }
-
-      if (wishlistBtn) {
-        wishlistBtn.addEventListener("click", function () {
-          const productId = this.dataset.productId;
-          fetch("{% url 'ajax_add_to_wishlist' %}", {
-            method: "POST",
-            headers: {
-              "X-CSRFToken": "{{ csrf_token }}",
-              "Content-Type": "application/x-www-form-urlencoded"
-            },
-            body: `product_id=${productId}`
-          })
-            .then(res => res.json())
-            .then(data => {
-              if (data.status === 'added') {
-                updateWishlistCount(data.wishlist_count);
-
-                showToast("Added to wishlist!");
-              } else {
-                showToast("Already in wishlist", false);
-              }
-            });
-        });
-      }
-    });
+        fetch("{% url 'ajax_add_to_wishlist' %}", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": "{{ csrf_token }}",
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: `variant_id=${selected.id}`
+        })
+          .then(res => res.json())
+          .then(data => {
+            if (data.status === "added") {
+              updateWishlistCount(data.wishlist_count);
+              showToast("Added to wishlist!");
+            } else {
+              showToast("Already in wishlist", false);
+            }
+          });
+      });
+    }
   });
 </script>
+
 {% endblock %}

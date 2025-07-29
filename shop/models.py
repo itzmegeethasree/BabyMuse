@@ -151,9 +151,11 @@ class Wishlist(models.Model):
     product = models.ForeignKey(
         Product, on_delete=models.CASCADE, related_name='wishlisted_by')
     added_at = models.DateTimeField(auto_now_add=True)
+    variant = models.ForeignKey(
+        ProductVariant, null=True, blank=True, on_delete=models.SET_NULL)
 
     class Meta:
-        unique_together = ('user', 'product')
+        unique_together = ('user', 'variant')
         ordering = ['-added_at']
 
     def __str__(self):

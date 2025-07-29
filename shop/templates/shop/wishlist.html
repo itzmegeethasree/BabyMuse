@@ -9,23 +9,29 @@
   <ul class="space-y-4">
     {% for item in wishlist_items %}
     <li class="flex justify-between items-center border p-4 rounded-md shadow-sm"
-      id="wishlist-item-{{ item.product.id }}">
+      id="wishlist-item-{{ item.variant.id }}">
       <!-- Product Info -->
       <div class="flex gap-4 items-center">
         <img src="{{ item.product.primary_image }}" alt="{{ item.product.name }}"
           class="w-24 h-24 object-cover rounded-md border">
         <div>
           <h3 class="font-semibold text-lg">{{ item.product.name }}</h3>
-          <p class="text-gray-700">₹{{ item.product.price }}</p>
+          <p class="text-gray-700">₹{{ item.variant.price }}</p>
+          <p>Stock: {{ item.variant.stock }}</p>
+
         </div>
+        {% for option in item.variant.options.all %}
+        <span>{{ option.attribute.name }}: {{ option.value }}</span>
+        {% endfor %}
+
       </div>
 
       <!-- Actions -->
       <div class="text-right space-x-3">
         <button class="add-to-cart-btn text-green-600 hover:underline font-medium"
-          data-product-id="{{ item.product.id }}">🛒 Add to Cart</button>
+          data-variant-id="{{ item.variant.id }}">🛒 Add to Cart</button>
         <button class="remove-from-wishlist-btn text-red-600 hover:underline font-medium"
-          data-product-id="{{ item.product.id }}">🗑️ Remove</button>
+          data-variant-id="{{ item.variant.id }}">🗑️ Remove</button>
       </div>
     </li>
     {% endfor %}
@@ -75,7 +81,7 @@
     // 🛒 Add to Cart
     document.querySelectorAll(".add-to-cart-btn").forEach(button => {
       button.addEventListener("click", function () {
-        const productId = this.dataset.productId;
+        const variantId = this.dataset.variantId;
 
         fetch("{% url 'ajax_add_to_cart' %}", {
           method: "POST",
@@ -83,7 +89,7 @@
             "X-CSRFToken": csrfToken,
             "Content-Type": "application/x-www-form-urlencoded"
           },
-          body: `product_id=${productId}`
+          body: `variant_id=${variantId}`
         })
           .then(res => res.json())
           .then(data => {
@@ -100,22 +106,21 @@
     // ❌ Remove from Wishlist
     document.querySelectorAll(".remove-from-wishlist-btn").forEach(button => {
       button.addEventListener("click", function () {
-        const productId = this.dataset.productId;
+        const variantId = this.dataset.variantId;
 
         fetch("{% url 'ajax_remove_from_wishlist' %}", {
           method: "POST",
           headers: {
-            "X-CSRFToken": csrfToken,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrfToken
           },
-          body: JSON.stringify({ product_id: productId })
+          body: JSON.stringify({ variant_id: variantId })
         })
           .then(res => res.json())
           .then(data => {
             if (data.status === 'success') {
-              document.getElementById(`wishlist-item-${productId}`).remove();
+              document.getElementById(`wishlist-item-${variantId}`).remove();
               updateWishlistCount(data.wishlist_count);
-
               showToast("🗑️ Removed from wishlist");
             } else {
               showToast("⚠️ Error removing item", true);
@@ -123,6 +128,7 @@
           });
       });
     });
+
   });
 </script>
 {% endblock %}

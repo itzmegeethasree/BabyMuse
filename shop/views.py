@@ -7,7 +7,7 @@ from django.views.decorators.http import require_POST
 import json
 from django.db.models import Avg
 
-from .models import Product, Category, Wishlist, CartItem, Review
+from .models import Product, Category, Wishlist, CartItem, Review, ProductVariant
 
 
 from django.db.models import Min, Q
@@ -97,6 +97,8 @@ def product_detail(request, pk):
                     'price': float(variant.price),
                     'stock': variant.stock
                 })
+        unique_sizes = sorted(set(v['size'] for v in variants))
+        unique_colors = sorted(set(v['color'] for v in variants))
 
         context = {
             'product': product,
@@ -105,6 +107,9 @@ def product_detail(request, pk):
             'reviews': reviews,
             'avg_rating': round(avg_rating, 1) if avg_rating else 0,
             'review_count': total_reviews,
+            'unique_sizes': unique_sizes,
+            'unique_colors': unique_colors,
+
         }
         return render(request, 'shop/product_detail.html', context)
 
@@ -117,19 +122,39 @@ def product_detail(request, pk):
 
 @login_required
 def wishlist_view(request):
-    wishlist_items = Wishlist.objects.filter(
-        user=request.user).select_related('product')
-    return render(request, 'shop/wishlist.html', {'wishlist_items': wishlist_items})
+    wishlist_items = (
+        Wishlist.objects
+        .filter(user=request.user)
+        .select_related('product', 'variant')
+        # Optional: for size/color display
+        .prefetch_related('variant__options__attribute')
+    )
+    return render(request, 'shop/wishlist.html', {
+        'wishlist_items': wishlist_items
+    })
 
 
 @login_required
 @require_POST
 def ajax_add_to_wishlist(request):
-    product_id = request.POST.get('product_id')
-    product = get_object_or_404(Product, id=product_id)
+    variant_id = request.POST.get('variant_id')
+    if not variant_id:
+        return JsonResponse({'status': 'error', 'message': 'Variant ID missing'}, status=400)
+
+    try:
+        variant = ProductVariant.objects.select_related(
+            'product').get(id=variant_id)
+    except ProductVariant.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Variant not found'}, status=404)
+
     wishlist_item, created = Wishlist.objects.get_or_create(
-        user=request.user, product=product)
+        user=request.user,
+        product=variant.product,
+        variant=variant
+    )
+
     wish_count = Wishlist.objects.filter(user=request.user).count()
+
     return JsonResponse({
         'status': 'added' if created else 'exists',
         'wishlist_count': wish_count
@@ -140,46 +165,68 @@ def ajax_add_to_wishlist(request):
 @require_POST
 def ajax_remove_from_wishlist(request):
     data = json.loads(request.body)
-    product_id = data.get("product_id")
-    Wishlist.objects.filter(user=request.user, product_id=product_id).delete()
+    variant_id = data.get("variant_id")
+
+    if not variant_id:
+        return JsonResponse({"status": "error", "message": "Variant ID missing"}, status=400)
+
+    Wishlist.objects.filter(user=request.user, variant_id=variant_id).delete()
+
     wish_count = Wishlist.objects.filter(user=request.user).count()
+
     return JsonResponse({
         "status": "success",
         "message": "Removed from wishlist",
         "wishlist_count": wish_count
     })
+
 # -------------------- CART ----------------------
 
 
 @login_required
 def cart_view(request):
     cart_items = CartItem.objects.filter(
-        user=request.user).select_related('product')
+        user=request.user).select_related('product_variant', 'product_variant__product')
+
     for item in cart_items:
-        item.total_price = item.quantity * item.product.price
+        item.total_price = item.quantity * item.product_variant.get_offer_price()
+
     total_price = round(sum(item.total_price for item in cart_items), 2)
 
-    return render(request, 'shop/cart.html', {'cart_items': cart_items, 'total_price': total_price})
+    return render(request, 'shop/cart.html', {
+        'cart_items': cart_items,
+        'total_price': total_price
+    })
 
 
 @login_required
 @require_POST
 def ajax_add_to_cart(request):
-    product_id = request.POST.get('product_id')
-    product = get_object_or_404(Product, id=product_id)
+    variant_id = request.POST.get('variant_id')
+    if not variant_id:
+        return JsonResponse({'status': 'error', 'message': 'Missing variant'}, status=400)
 
-    if product.stock < 1:
+    try:
+        variant = ProductVariant.objects.get(pk=variant_id)
+    except ProductVariant.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Variant not found'}, status=404)
+
+    if variant.stock < 1:
         return JsonResponse({'status': 'error', 'message': 'Out of stock'})
 
     cart_item, created = CartItem.objects.get_or_create(
-        user=request.user, product=product)
+        user=request.user,
+        product_variant=variant
+    )
+
     if not created:
-        if cart_item.quantity >= product.stock:
+        if cart_item.quantity >= variant.stock:
             return JsonResponse({'status': 'error', 'message': 'Stock limit reached'})
         cart_item.quantity += 1
         cart_item.save()
 
     cart_count = CartItem.objects.filter(user=request.user).count()
+
     return JsonResponse({'status': 'success', 'cart_count': cart_count})
 
 
@@ -201,36 +248,47 @@ def ajax_remove_from_cart(request):
 
 @require_POST
 @login_required
-def ajax_update_cart_quantity(request, product_id):
+def ajax_update_cart_quantity(request, variant_id):
     try:
         quantity = int(request.POST.get('quantity', 1))
+
         cart_item = CartItem.objects.get(
-            user=request.user, product_id=product_id)
+            user=request.user, product_variant_id=variant_id)
 
         if quantity < 1:
             cart_item.delete()
             total_price = sum(
-                i.quantity * i.product.price for i in CartItem.objects.filter(user=request.user)
+                i.quantity * i.product_variant.get_offer_price()
+                for i in CartItem.objects.filter(user=request.user)
             )
-            return JsonResponse({"status": "removed", "message": "Item removed from cart", "new_total": total_price})
+            return JsonResponse({
+                "status": "removed",
+                "message": "Item removed from cart",
+                "new_total": total_price
+            })
 
-        if quantity > cart_item.product.stock:
-            return JsonResponse({"status": "error", "message": "Only {} in stock.".format(cart_item.product.stock)})
+        if quantity > cart_item.product_variant.stock:
+            return JsonResponse({
+                "status": "error",
+                "message": f"Only {cart_item.product_variant.stock} in stock."
+            })
 
         cart_item.quantity = quantity
         cart_item.save()
 
         total_price = sum(
-            item.quantity * item.product.price for item in CartItem.objects.filter(user=request.user)
+            i.quantity * i.product_variant.get_offer_price()
+            for i in CartItem.objects.filter(user=request.user)
         )
 
         return JsonResponse({
             "status": "success",
-            "message": f"Quantity updated for {cart_item.product.name}.",
-            "item_total": cart_item.quantity * cart_item.product.price,
-            "unit_price": cart_item.product.price,
+            "message": f"Quantity updated for {cart_item.product_variant.product.name}.",
+            "item_total": cart_item.quantity * cart_item.product_variant.get_offer_price(),
+            "unit_price": cart_item.product_variant.get_offer_price(),
             "new_total": total_price
         })
+
     except CartItem.DoesNotExist:
         return JsonResponse({"status": "error", "message": "Item not found in your cart."})
     except ValueError:
