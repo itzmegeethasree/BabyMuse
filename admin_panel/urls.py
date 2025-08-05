@@ -53,9 +53,9 @@ urlpatterns = [
 
     # Products
     path('products/', views.admin_products, name='admin_products'),
-    path('products/add/', views.admin_product_add, name='admin_product_add'),
-    path('products/<int:product_id>/edit/',
-         views.admin_product_edit, name='admin_product_edit'),
+    path('products/add/', views.admin_product_form, name='admin_product_add'),
+    path('products/edit/<int:product_id>',
+         views.admin_product_form, name='admin_product_edit'),
     path('products/<int:product_id>/toggle/',
          views.admin_toggle_product_visibility, name='admin_toggle_product'),
 

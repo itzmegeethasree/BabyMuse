@@ -1,5 +1,5 @@
-from django.forms import inlineformset_factory, modelformset_factory
-from shop.models import Product, ProductImage, ProductVariant, Category, VariantOption
+from django.forms import inlineformset_factory
+from shop.models import Product, ProductVariant, Category, VariantOption
 from django import forms
 from .widgets import MultiFileInput
 from orders.models import Coupon
@@ -52,11 +52,23 @@ class ProductForm(forms.ModelForm):
         model = Product
         fields = [
             'name', 'category',  'description',
-            'price', 'min_age', 'max_age', 'gender',
+            'min_age', 'max_age', 'gender',
             'is_featured', 'is_listed', 'status', 'product_offer_percentage'
         ]
         widgets = {
-            'description': forms.Textarea(attrs={'rows': 4}),
+            'name': forms.TextInput(attrs={
+                'class': 'border border-gray-300 rounded px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400'
+            }),
+            'description': forms.Textarea(attrs={
+                'class': 'border border-gray-300 rounded px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400'
+            }),
+            'category': forms.Select(attrs={
+                'class': 'border border-gray-300 rounded px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-blue-400'
+            }),
+            'min_age': forms.NumberInput(attrs={'class': 'border border-gray-300 rounded focus:ring-blue-400'}),
+            'max_age': forms.NumberInput(attrs={'class': 'border border-gray-300 rounded focus:ring-blue-400'}),
+            'gender': forms.Select(attrs={'class': 'border border-gray-300 rounded  focus:ring-blue-400'}),
+            'product_offer_percentage': forms.NumberInput(attrs={'class': 'border border-gray-300 rounded focus:ring-blue-400'}),
         }
 
     def clean_name(self):
@@ -120,23 +132,48 @@ class VariantComboForm(forms.Form):
     price = forms.DecimalField()
     stock = forms.IntegerField()
 
-    def __init__(self, *args, **kwargs):
-        size_qs = kwargs.pop('size_qs', VariantOption.objects.none())
-        color_qs = kwargs.pop('color_qs', VariantOption.objects.none())
+    def __init__(self, *args, size_qs=None, color_qs=None, existing_combos=None, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['size'].queryset = size_qs
-        self.fields['color'].queryset = color_qs
+        # Use size_qs and color_qs to set queryset for fields if needed
+        if size_qs is not None:
+            self.fields['size'].queryset = size_qs
+        if color_qs is not None:
+            self.fields['color'].queryset = color_qs
+        self.existing_combos = existing_combos if existing_combos is not None else set()
 
     def clean(self):
         cleaned = super().clean()
         size = cleaned.get('size')
         color = cleaned.get('color')
         sku = cleaned.get('sku')
+        # Pass product_id in initial if needed
+        product_id = self.initial.get('product_id')
+
+        # Check for duplicate variant combination
+        combo_key = f"{size.id}-{color.id}" if size and color else None
+        if combo_key and combo_key in self.existing_combos:
+            raise forms.ValidationError(
+                "Duplicate variant combination (size/color) detected.")
+        self.existing_combos.add(combo_key)
+
+        # Generate SKU if missing
         name = self.initial.get('product_name', '')
         if not sku:
             base = slugify(name)[:6]
             sku = f"{base}-{size.value[:2].upper()}-{color.value[:2].upper()}"
             cleaned['sku'] = sku
+
+        # Check SKU uniqueness for this product, excluding current variant if editing
+        if sku and product_id:
+            # Try to get the current variant id from initial (if editing)
+            current_variant_id = self.initial.get('variant_id')
+            qs = ProductVariant.objects.filter(product_id=product_id, sku=sku)
+            if current_variant_id:
+                qs = qs.exclude(id=current_variant_id)
+            if qs.exists():
+                raise forms.ValidationError(
+                    f"SKU '{sku}' already exists for this product.")
+
         return cleaned
 
 

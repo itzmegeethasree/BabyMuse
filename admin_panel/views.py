@@ -234,6 +234,8 @@ def delete_category(request, pk):
     category.save()
     messages.success(request, "Category deleted.")
     return redirect('admin_panel:category_list')
+
+
 # product management
 
 
@@ -293,9 +295,19 @@ def save_product_and_variants(request, product, is_edit, size_qs, color_qs):
     new_images = json.loads(cropped_images_data) if cropped_images_data else []
 
     variant_data = parse_variants_from_post(request.POST)
+    existing_combos = set()
     variant_forms = [
-        VariantComboForm(data=row, initial={'product_name': request.POST.get(
-            'name', '')}, size_qs=size_qs, color_qs=color_qs)
+        VariantComboForm(
+            data=row,
+            initial={
+                'product_name': request.POST.get('name', ''),
+                'product_id': product.id if product else None,
+                'variant_id': row.get('variant_id')
+            },
+            size_qs=size_qs,
+            color_qs=color_qs,
+            existing_combos=existing_combos
+        )
         for row in variant_data
     ]
 
@@ -307,34 +319,84 @@ def save_product_and_variants(request, product, is_edit, size_qs, color_qs):
 
         product = form.save()
 
-        if new_images:
-            if is_edit:
-                product.images.all().delete()
-            handle_cropped_images(product, new_images)
+        # Get IDs of images to keep
+        keep_image_ids = request.POST.getlist('keep_image_ids')
+        cropped_images_data = request.POST.get('cropped_images_data')
+        new_images = []
 
-        seen = set()
+        if cropped_images_data:
+            images_data = json.loads(cropped_images_data)
+            for idx, img_str in enumerate(images_data):
+                format, imgstr = img_str.split(';base64,')
+                ext = format.split('/')[-1]
+                new_images.append(ContentFile(base64.b64decode(
+                    imgstr), name=f'cropped{idx+1}.{ext}'))
+
+        total_images = len(keep_image_ids) + len(new_images)
+        if total_images == 0:
+            messages.error(
+                request, "At least one product image must be kept or uploaded.")
+            return None, form, variant_forms
+        elif total_images > 3:
+            messages.error(
+                request, "You cannot have more than 3 images in total.")
+            return None, form, variant_forms
+
+        # Delete images NOT in keep_image_ids
+        product.images.exclude(id__in=keep_image_ids).delete()
+        # Add new images
+        for image_file in new_images:
+            ProductImage.objects.create(product=product, image=image_file)
+
+        submitted_keys = set()
         for form in variant_forms:
             size = form.cleaned_data['size']
             color = form.cleaned_data['color']
             sku = form.cleaned_data['sku']
             price = form.cleaned_data['price']
             stock = form.cleaned_data['stock']
-            key = f"{size.id}-{color.id}"
+            variant_id = form.initial.get('variant_id')
 
-            if key in seen:
-                continue
-            seen.add(key)
+            # Try to find existing variant by size/color
+            existing_variant = None
+            if variant_id:
+                existing_variant = product.variants.filter(
+                    id=variant_id).first()
+            else:
+                existing_variant = product.variants.filter(
+                    options=size
+                ).filter(
+                    options=color
+                ).first()
 
-            if ProductVariant.objects.filter(sku=sku).exists():
-                base_sku = sku
-                count = 1
-                while ProductVariant.objects.filter(sku=f"{base_sku}-{count}").exists():
-                    count += 1
-                sku = f"{base_sku}-{count}"
+            if existing_variant:
+                # When checking for SKU uniqueness
+                if ProductVariant.objects.filter(product=product, sku=sku).exclude(id=existing_variant.id).exists():
+                    form.add_error(
+                        'sku', f"SKU '{sku}' already exists for this product.")
+                    continue
+                existing_variant.sku = sku
+                existing_variant.price = price
+                existing_variant.stock = stock
+                existing_variant.save()
+            else:
+                # Check for SKU uniqueness for new variant
+                if ProductVariant.objects.filter(product=product, sku=sku).exists():
+                    form.add_error(
+                        'sku', f"SKU '{sku}' already exists for this product.")
+                    continue
+                variant = ProductVariant.objects.create(
+                    product=product, sku=sku, price=price, stock=stock)
+                variant.options.set([size, color])
 
-            variant = ProductVariant.objects.create(
-                product=product, sku=sku, price=price, stock=stock)
-            variant.options.set([size, color])
+            submitted_keys.add((size.id, color.id))
+
+        # Delete variants not present in submitted_keys
+        for variant in product.variants.all():
+            size = variant.options.filter(attribute__name='Size').first()
+            color = variant.options.filter(attribute__name='Color').first()
+            if size and color and (size.id, color.id) not in submitted_keys:
+                variant.delete()
 
         return product, None, None
     else:
@@ -342,121 +404,43 @@ def save_product_and_variants(request, product, is_edit, size_qs, color_qs):
 
 
 @admin_login_required
-def admin_product_add(request):
+def admin_product_form(request, product_id=None):
+    if product_id:
+        product = get_object_or_404(Product, pk=product_id)
+        is_edit = True
+    else:
+        product = None
+        is_edit = False
+
     size_attr = VariantAttribute.objects.get(name__iexact='Size')
     color_attr = VariantAttribute.objects.get(name__iexact='Color')
     size_qs, color_qs = size_attr.options.all(), color_attr.options.all()
 
     if request.method == 'POST':
-        product, errors_form, errors_variants = save_product_and_variants(
-            request, None, False, size_qs, color_qs)
-        if product:
-            messages.success(request, "Product added successfully.")
+        product_obj, errors_form, errors_variants = save_product_and_variants(
+            request, product, is_edit, size_qs, color_qs)
+        if product_obj:
+            messages.success(
+                request, f"Product {'updated' if is_edit else 'added'} successfully.")
             return redirect('admin_panel:admin_products')
         messages.error(request, "Please correct the errors below.")
-        return render(request, 'admin_panel/add_product.html', {
+        return render(request, 'admin_panel/product_form.html', {
             'product_form': errors_form,
             'size_options': size_qs,
             'color_options': color_qs,
+            'variant_forms': errors_variants,
+            'is_edit': is_edit,
+            'product': product,
+            'existingVariants': get_existing_variant_data(product) if product else [],
         })
 
-    return render(request, 'admin_panel/add_product.html', {
-        'product_form': ProductForm(),
+    return render(request, 'admin_panel/product_form.html', {
+        'product_form': ProductForm(instance=product),
         'size_options': size_qs,
         'color_options': color_qs,
-    })
-
-
-@admin_login_required
-def admin_product_edit(request, product_id):
-    product = get_object_or_404(Product, pk=product_id)
-    size_attr = VariantAttribute.objects.get(name__iexact='Size')
-    color_attr = VariantAttribute.objects.get(name__iexact='Color')
-    size_qs = size_attr.options.all()
-    color_qs = color_attr.options.all()
-
-    if request.method == 'POST':
-        product_form = ProductForm(
-            request.POST, request.FILES, instance=product)
-
-        if product_form.is_valid():
-            product = product_form.save()
-
-            existing_variant_ids = []
-            total = int(request.POST.get('variant-count', 0))
-
-            for i in range(total):
-                vid = request.POST.get(f'variants[{i}][id]', '')
-                size_id = request.POST.get(f'variants[{i}][size]')
-                color_id = request.POST.get(f'variants[{i}][color]')
-                sku = request.POST.get(f'variants[{i}][sku]')
-                price = request.POST.get(f'variants[{i}][price]')
-                stock = request.POST.get(f'variants[{i}][stock]')
-
-                # Skip if required fields are missing
-                if not (size_id and color_id and sku and price and stock):
-                    continue
-
-                try:
-                    size_option = VariantOption.objects.get(id=size_id)
-                    color_option = VariantOption.objects.get(id=color_id)
-                except VariantOption.DoesNotExist:
-                    continue
-
-                # Convert vid safely
-                vid_int = int(vid) if vid and vid.isdigit() else None
-
-                # Check for SKU uniqueness (excluding the current variant if editing)
-                existing_sku_variant = ProductVariant.objects.filter(sku=sku)
-                if vid_int:
-                    existing_sku_variant = existing_sku_variant.exclude(
-                        id=vid_int)
-                if existing_sku_variant.exists():
-                    messages.error(request, f"SKU '{sku}' is already in use.")
-                    continue
-
-                if vid_int:
-                    # Update existing variant
-                    variant = ProductVariant.objects.filter(
-                        id=vid_int, product=product).first()
-                    if variant:
-                        variant.sku = sku
-                        variant.price = price
-                        variant.stock = stock
-                        variant.save()
-                        variant.options.set([size_option, color_option])
-                        existing_variant_ids.append(variant.id)
-                else:
-                    # Create new variant
-                    variant = ProductVariant.objects.create(
-                        product=product,
-                        sku=sku,
-                        price=price,
-                        stock=stock,
-                    )
-                    variant.options.set([size_option, color_option])
-                    existing_variant_ids.append(variant.id)
-
-            # Delete removed variants
-            ProductVariant.objects.filter(product=product).exclude(
-                id__in=existing_variant_ids).delete()
-
-            messages.success(request, "Product updated successfully.")
-            return redirect('admin_panel:admin_products')
-        else:
-            messages.error(request, "Please correct the form errors.")
-            existing_variants = get_existing_variant_data(product)
-
-    else:
-        product_form = ProductForm(instance=product)
-        existing_variants = get_existing_variant_data(product)
-
-    return render(request, 'admin_panel/edit_product.html', {
-        'product_form': product_form,
-        'size_options': size_qs,
-        'color_options': color_qs,
-        'existing_images': product.images.all(),
-        'existingVariants': existing_variants,
+        'is_edit': is_edit,
+        'product': product,
+        'existingVariants': get_existing_variant_data(product) if product else [],
     })
 
 
@@ -467,6 +451,7 @@ def get_existing_variant_data(product):
         color = variant.options.filter(attribute__name='Color').first()
         if size and color:
             variants.append({
+                'id': variant.id,
                 'size_id': size.id,
                 'size_label': size.value,
                 'color_id': color.id,
@@ -641,86 +626,6 @@ def admin_return_requests(request):
     return render(request, 'admin_panel/return_request.html', {'return_requests': return_requests})
 
 # product management
-
-
-@admin_login_required
-def admin_edit_product(request, product_id):
-    product = get_object_or_404(Product, id=product_id)
-    categories = Category.objects.filter(is_deleted=False)
-
-    if request.method == 'POST':
-        name = request.POST.get('name', '').strip()
-        category_id = request.POST.get('category')
-        description = request.POST.get('description', '').strip()
-        price = request.POST.get('price')
-        stock = request.POST.get('stock')
-        status = request.POST.get('status', 'Active')
-        min_age = request.POST.get('min_age')
-        max_age = request.POST.get('max_age')
-        gender = request.POST.get('gender', 'Unisex')
-        images = request.FILES.getlist('images')
-
-        errors = []
-        if not name:
-            errors.append("Product name is required.")
-        if not category_id:
-            errors.append("Category is required.")
-        if not description:
-            errors.append("Description is required.")
-        if not price or not price.replace('.', '', 1).isdigit() or float(price) < 0:
-            errors.append("Valid price is required.")
-        if not stock or not stock.isdigit() or int(stock) < 0:
-            errors.append("Valid stock is required.")
-        if min_age and (not min_age.isdigit() or not (0 <= int(min_age) <= 36)):
-            errors.append("Min age must be between 0 and 36 months.")
-        if max_age and (not max_age.isdigit() or not (0 <= int(max_age) <= 36)):
-            errors.append("Max age must be between 0 and 36 months.")
-        if min_age and max_age and int(min_age) > int(max_age):
-            errors.append("Min age cannot be greater than max age.")
-        if gender not in ['Male', 'Female', 'Unisex']:
-            errors.append("Invalid gender selected.")
-        if images and len(images) != 3:
-            errors.append(
-                "If uploading new images, you must upload exactly 3 cropped images.")
-
-        try:
-            category = Category.objects.get(id=category_id)
-        except (Category.DoesNotExist, ValueError, TypeError):
-            errors.append("Invalid category selected.")
-
-        if errors:
-            for error in errors:
-                messages.error(request, error)
-            return render(request, 'admin_panel/edit_product.html', {
-                'product': product,
-                'categories': categories
-            })
-
-        # Update product fields
-        product.name = name
-        product.category = category
-        product.description = description
-        product.price = price
-        product.stock = stock
-        product.status = status
-        product.min_age = min_age or None
-        product.max_age = max_age or None
-        product.gender = gender
-        product.save()
-
-        # If new images uploaded, replace old images
-        if images:
-            product.images.all().delete()
-            for image_file in images:
-                ProductImage.objects.create(product=product, image=image_file)
-
-        messages.success(request, "Product updated successfully!")
-        return redirect('admin_panel:admin_products')
-
-    return render(request, 'admin_panel/edit_product.html', {
-        'product': product,
-        'categories': categories
-    })
 
 
 @admin_login_required

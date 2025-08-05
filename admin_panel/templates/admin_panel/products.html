@@ -21,52 +21,78 @@
   <table class="w-full text-sm border shadow">
     <thead class="bg-gray-100">
       <tr>
-        <th class="p-2">Image</th>
-        <th class="p-2">Name</th>
-        <th class="p-2">Category</th>
-        <th class="p-2">Varients</th>
-        <th class="p-2">Stock</th>
-        <th class="p-2">Status</th>
-        <th class="p-2">Age Range</th>
-        <th class="p-2">Gender</th>
-        <th class="p-2">Actions</th>
+        <th class="p-2 text-center">Image</th>
+        <th class="p-2 text-center">Name</th>
+        <th class="p-2 text-center">Category</th>
+        <th class="p-2 text-center">Variants</th>
+        <th class="p-2 text-center">Total Stock</th>
+        <th class="p-2 text-center">Status</th>
+        <th class="p-2 text-center">Age Range</th>
+        <th class="p-2 text-center">Gender</th>
+        <th class="p-2 text-center">Actions</th>
       </tr>
     </thead>
     <tbody>
       {% for product in page_obj %}
-      <tr class="border-b">
-        <td class="p-2">
-          <img src="{{ product.primary_image }}" alt="Image" class="h-14 w-14 object-cover rounded" />
+      <tr class="border-b text-center">
+        <td class="p-2 align-middle">
+          <img src="{{ product.primary_image }}" alt="Image" class="h-14 w-14 object-cover rounded mx-auto" />
         </td>
-        <td class="p-2">{{ product.name }}</td>
-        <td class="p-2">{{ product.category.name }}</td>
-        <td class="p-2 text-xs">
-          {% for variant in product.variants.all %}
-          <div class="mb-1 border-l pl-2">
-            {% with variant.options.all as opts %}
-            {% for opt in opts %}
-            <span class="bg-gray-100 px-2 py-0.5 rounded text-xs">{{ opt.value }}</span>
-            {% endfor %}
-            {% endwith %}
-            <span class="text-gray-700 ml-2">
-              ₹{{ variant.price }}|Stock: {{ variant.stock }}
-            </span>
-          </div>
-          {% empty %}
+        <td class="p-2 align-middle">{{ product.name }}</td>
+        <td class="p-2 align-middle">{{ product.category.name }}</td>
+        <td class="p-2 align-middle text-xs">
+          {% if product.variants.exists %}
+          <table class="w-full border text-xs bg-gray-50 rounded shadow-sm mx-auto">
+            <thead>
+              <tr>
+                <th class="p-1 text-center">Size</th>
+                <th class="p-1 text-center">Color</th>
+                <th class="p-1 text-center">SKU</th>
+                <th class="p-1 text-center">Price</th>
+                <th class="p-1 text-center">Stock</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for variant in product.variants.all %}
+              {% with opts=variant.options.all %}
+              <tr class="hover:bg-blue-50 text-center">
+                <td class="p-1 align-middle">
+                  {% for opt in opts %}
+                  {% if opt.attribute.name == 'Size' %}
+                  {{ opt.value }}
+                  {% endif %}
+                  {% endfor %}
+                </td>
+                <td class="p-1 align-middle">
+                  {% for opt in opts %}
+                  {% if opt.attribute.name == 'Color' %}
+                  <span class="inline-block px-2 py-0.5 rounded bg-gray-200">{{ opt.value }}</span>
+                  {% endif %}
+                  {% endfor %}
+                </td>
+                <td class="p-1 align-middle">{{ variant.sku }}</td>
+                <td class="p-1 align-middle">₹{{ variant.price }}</td>
+                <td class="p-1 align-middle">{{ variant.stock }}</td>
+              </tr>
+              {% endwith %}
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
           <span class="text-gray-400">No variants</span>
-          {% endfor %}
+          {% endif %}
         </td>
-        <td class="p-2">{{ product.total_stock }}</td>
-        <td class="p-2">
+        <td class="p-2 align-middle">{{ product.total_stock }}</td>
+        <td class="p-2 align-middle">
           {% if product.is_deleted %}
           <span class="text-red-500 font-semibold">Unlisted</span>
           {% else %}
           <span class="text-green-600 font-semibold">Listed</span>
           {% endif %}
         </td>
-        <td class="p-2">{{ product.min_age }} - {{ product.max_age }} mo</td>
-        <td class="p-2">{{ product.gender }}</td>
-        <td class="p-2 space-x-2">
+        <td class="p-2 align-middle">{{ product.min_age }} - {{ product.max_age }} mo</td>
+        <td class="p-2 align-middle">{{ product.gender }}</td>
+        <td class="p-2 align-middle space-x-2">
           <a href="{% url 'admin_panel:admin_product_edit' product.id %}" class="text-blue-600 hover:underline">Edit</a>
           |
           <a href="{% url 'admin_panel:admin_toggle_product' product.id %}" class="text-pink-600 hover:underline"
