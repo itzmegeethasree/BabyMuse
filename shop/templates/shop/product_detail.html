@@ -55,7 +55,30 @@
     {% endif %}
     {% endwith %}
 
+
+    <!-- Dynamic Price Display -->
+    <div id="variantPrice" class="text-2xl text-pink-600 font-semibold mb-1">
+      ₹{{ product.get_offer_price|floatformat:0 }}
+    </div>
+
+    <!-- Stock Info -->
+    <p id="variantStock" class="text-green-600">Select variant to view stock</p>
+
+    <!-- Add to Cart -->
+    <div class="flex gap-4 mt-6">
+      <button id="add-to-cart-btn" class="bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700 transition"
+        data-product-id="{{ product.id }}">🛒 Add to Cart</button>
+      <button id="add-to-wishlist-btn" class="bg-pink-500 text-white px-5 py-2 rounded hover:bg-pink-600 transition"
+        data-product-id="{{ product.id }}">❤️ Add to Wishlist</button>
+    </div>
+
+    <p class="mt-4 text-gray-700 leading-relaxed">{{ product.description }}</p>
+
     <!-- Variant Selection -->
+    <hr class="my-6 border-gray-300">
+
+    <h2 class="text-xl font-semibold mb-2">Choose Variant</h2>
+
     <div class="mb-4">
       <label class="block mb-1 font-medium">Choose Size</label>
       <select id="variantSize">
@@ -75,25 +98,10 @@
       </select>
     </div>
 
-    <!-- Dynamic Price Display -->
-    <div id="variantPrice" class="text-2xl text-pink-600 font-semibold mb-1">
-      ₹{{ product.get_offer_price|floatformat:0 }}
-    </div>
-
-    <!-- Stock Info -->
-    <p id="variantStock" class="text-green-600">Select variant to view stock</p>
-
-    <!-- Add to Cart -->
-    <div class="flex gap-4 mt-6">
-      <button id="add-to-cart-btn" class="bg-green-600 text-white px-5 py-2 rounded hover:bg-green-700 transition"
-        data-product-id="{{ product.id }}">🛒 Add to Cart</button>
-      <button id="add-to-wishlist-btn" class="bg-pink-500 text-white px-5 py-2 rounded hover:bg-pink-600 transition"
-        data-product-id="{{ product.id }}">❤️ Add to Wishlist</button>
-    </div>
-
-    <p class="mt-4 text-gray-700 leading-relaxed">{{ product.description }}</p>
   </div>
+
 </div>
+
 
 <!-- Toast -->
 <div id="toast"

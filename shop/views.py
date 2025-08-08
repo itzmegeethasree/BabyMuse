@@ -22,8 +22,6 @@ def shop_view(request):
 
     # Base queryset with only active, non-deleted products
     products = Product.objects.filter(status='Active', is_deleted=False)
-
-    # Annotate with minimum variant price
     products = products.annotate(min_variant_price=Min('variants__price'))
 
     # Search by product name
@@ -56,7 +54,10 @@ def shop_view(request):
     paginator = Paginator(products, 9)
     page_number = request.GET.get('page')
     page_obj = paginator.get_page(page_number)
-
+    for product in page_obj:
+        default_variant = product.variants.filter(
+            stock__gt=0, product__status='Active').order_by('price').first()
+        product.default_variant_id = default_variant.id if default_variant else None
     context = {
         'page_obj': page_obj,
         'search_query': search_query,
@@ -119,18 +120,48 @@ def product_detail(request, pk):
 
 
 # ------------------- WISHLIST --------------------
+@require_POST
+@login_required
+def direct_add_to_wishlist(request):
+    variant_id = request.POST.get('variant_id')
+    try:
+        variant = ProductVariant.objects.get(id=variant_id)
+        Wishlist.objects.get_or_create(
+            user=request.user,
+            product=variant.product,
+            variant=variant
+        )
+        messages.success(request, "Added to wishlist!")
+    except ProductVariant.DoesNotExist:
+        messages.error(request, "Variant not found.")
+    return redirect('shop')
+
 
 @login_required
 def wishlist_view(request):
+    search_query = request.GET.get('q', '')
+
     wishlist_items = (
         Wishlist.objects
         .filter(user=request.user)
         .select_related('product', 'variant')
-        # Optional: for size/color display
         .prefetch_related('variant__options__attribute')
     )
+
+    # Filter by search (by product name)
+    if search_query:
+        wishlist_items = wishlist_items.filter(
+            Q(product__name__icontains=search_query)
+        )
+
+    paginator = Paginator(wishlist_items, 6)  # 6 items per page
+    page_number = request.GET.get('page')
+    page_obj = paginator.get_page(page_number)
+
     return render(request, 'shop/wishlist.html', {
-        'wishlist_items': wishlist_items
+        'wishlist_items': page_obj,
+        'search_query': search_query,
+        'page_obj': page_obj,
     })
 
 
@@ -183,10 +214,44 @@ def ajax_remove_from_wishlist(request):
 # -------------------- CART ----------------------
 
 
+@require_POST
+@login_required
+def direct_add_to_cart(request):
+    variant_id = request.POST.get('variant_id')
+    try:
+        variant = ProductVariant.objects.get(id=variant_id)
+        if variant.stock < 1:
+            messages.error(request, "This item is out of stock.")
+            return redirect('shop')
+
+        cart_item, created = CartItem.objects.get_or_create(
+            user=request.user,
+            product_variant=variant
+        )
+        if not created:
+            if cart_item.quantity >= variant.stock:
+                messages.warning(request, "Stock limit reached.")
+            else:
+                cart_item.quantity += 1
+                cart_item.save()
+        messages.success(request, "Added to cart!")
+    except ProductVariant.DoesNotExist:
+        messages.error(request, "Variant not found.")
+    return redirect('shop')
+
+
 @login_required
 def cart_view(request):
+    search_query = request.GET.get('q', '').strip()
+
     cart_items = CartItem.objects.filter(
-        user=request.user).select_related('product_variant', 'product_variant__product')
+        user=request.user
+    ).select_related('product_variant', 'product_variant__product')
+
+    if search_query:
+        cart_items = cart_items.filter(
+            Q(product_variant__product__name__icontains=search_query)
+        )
 
     for item in cart_items:
         item.total_price = item.quantity * item.product_variant.get_offer_price()
@@ -195,7 +260,8 @@ def cart_view(request):
 
     return render(request, 'shop/cart.html', {
         'cart_items': cart_items,
-        'total_price': total_price
+        'total_price': total_price,
+        'search_query': search_query
     })
 
 
@@ -298,7 +364,7 @@ def ajax_update_cart_quantity(request, variant_id):
 @login_required
 def ajax_cart_data(request):
     cart_items = CartItem.objects.filter(
-        user=request.user).select_related('product')
+        user=request.user).select_related('product_variant', 'product_variant__product')
     data = []
     total_price = 0
     for item in cart_items:

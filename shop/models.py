@@ -66,12 +66,6 @@ class Product(models.Model):
     is_featured = models.BooleanField(default=False)
     is_listed = models.BooleanField(default=True)
 
-    def get_offer_price(self):
-        product_offer = self.product_offer_percentage
-        category_offer = self.category.offer_percentage if self.category else 0
-        best_offer = max(product_offer, category_offer)
-        return self.price - (self.price * best_offer / 100)
-
     def get_active_offer(self):
         product_offer = self.product_offer_percentage
         category_offer = self.category.offer_percentage if self.category else 0
@@ -90,6 +84,16 @@ class Product(models.Model):
     def primary_image(self):
         first_image = self.images.first()
         return first_image.image.url if first_image else '/static/images/default-img.jpg'
+
+    @property
+    def min_offer_price(self):
+        variants = self.variants.all()
+        if not variants:
+            return 0
+        return min(v.get_offer_price() for v in variants)
+
+    def get_default_variant(self):
+        return self.variants.filter(stock__gt=0).order_by('price').first()
 
 
 class ProductImage(models.Model):

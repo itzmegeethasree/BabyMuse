@@ -6,7 +6,6 @@
 <div class="bg-gray-50 min-h-screen py-8">
   <div class="container mx-auto px-4">
     <h1 class="text-3xl font-bold mb-6 text-center text-pink-600">Shop BabyMuse Products</h1>
-
     <!-- 🔍 Search & Filters -->
     <form method="get" class="mb-6 grid md:grid-cols-4 gap-4">
       <input type="text" name="search" placeholder="Search products..." value="{{ search_query }}"
@@ -55,7 +54,7 @@
             class="w-full h-60 object-cover object-center rounded-md">
           {% endif %}
 
-          {% if product.stock == 0 %}
+          {% if product.total_stock == 0 %}
           <span class="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded">Out of Stock</span>
           {% endif %}
         </a>
@@ -64,30 +63,34 @@
           <h2 class="text-lg font-semibold text-gray-800">{{ product.name }}</h2>
 
           {% with offer=product.get_active_offer %}
-          {% if offer.1 > 0 %}
+          {% with offer_name=offer.0 offer_percent=offer.1 %}
+          {% if offer_percent > 0 %}
           <span class="inline-block bg-green-100 text-green-800 text-xs font-medium px-2 py-1 rounded">
-            {{ offer.1 }}% OFF - {{ offer.0 }}
+            {{ offer_percent }}% OFF - {{ offer_name }}
           </span>
           <div class="mt-1 flex items-baseline gap-2">
-            <span class="text-pink-600 text-lg font-bold">₹{{ product.get_offer_price|floatformat:0 }}</span>
-            <span class="text-gray-500 line-through text-sm">₹{{ product.price|floatformat:0 }}</span>
+            <span class="text-pink-600 text-lg font-bold">
+              ₹{{ product.min_offer_price|floatformat:0 }} </span>
+            <span class="text-gray-500 line-through text-sm">
+              ₹{{ product.min_variant_price|floatformat:0 }} </span>
           </div>
           {% else %}
-          <p class="text-pink-600 font-bold mt-2 text-lg">₹{{ product.min_variant_price|floatformat:0 }}</p>
-
+          <span class="text-pink-600 font-bold mt-2 text-lg">
+            ₹{{ product.min_variant_price|floatformat:0 }} </span>
           {% endif %}
+          {% endwith %}
           {% endwith %}
 
           <p class="text-gray-500 text-sm mt-1 truncate">{{ product.description }}</p>
 
           <div class="flex gap-2 mt-3">
             <button class="wishlist-btn bg-pink-100 text-pink-600 px-3 py-1 rounded hover:bg-pink-200"
-              data-product-id="{{ product.id }}">
+              data-variant-id="{{ product.default_variant_id }}">
               ❤️ Wishlist
             </button>
             {% if product.stock != 0 %}
             <button class="add-to-cart-btn bg-green-600 text-white px-3 py-1 rounded"
-              data-product-id="{{ product.id }}">
+              data-variant-id="{{ product.default_variant_id }}">
               🛒 Add to Cart
             </button>
             {% endif %}
@@ -117,7 +120,7 @@
   </div>
 </div>
 
-<!-- ✅ AJAX Scripts -->
+<!-- AJAX Scripts -->
 <script>
   function updateCartCount(count) {
     const el = document.getElementById("cart-count");
@@ -142,7 +145,7 @@
     // 🛒 Add to Cart
     document.querySelectorAll(".add-to-cart-btn").forEach(btn => {
       btn.addEventListener("click", function () {
-        const productId = this.dataset.productId;
+        const variantId = this.dataset.variantId;
 
         fetch("{% url 'ajax_add_to_cart' %}", {
           method: "POST",
@@ -150,7 +153,7 @@
             "X-CSRFToken": csrfToken,
             "Content-Type": "application/x-www-form-urlencoded"
           },
-          body: `product_id=${productId}`
+          body: `variant_id=${variantId}`
         })
           .then(res => res.json())
           .then(data => {
@@ -168,7 +171,7 @@
     // ❤️ Wishlist
     document.querySelectorAll(".wishlist-btn").forEach(btn => {
       btn.addEventListener("click", function () {
-        const productId = this.dataset.productId;
+        const variantId = this.dataset.variantId;
 
         fetch("{% url 'ajax_add_to_wishlist' %}", {
           method: "POST",
@@ -176,8 +179,9 @@
             "X-CSRFToken": csrfToken,
             "Content-Type": "application/x-www-form-urlencoded"
           },
-          body: `product_id=${productId}`
+          body: `variant_id=${variantId}`
         })
+
           .then(res => res.json())
           .then(data => {
             if (data.status === "added") {
@@ -191,18 +195,19 @@
           .catch(() => showToast("Error adding to wishlist"));
       });
     });
+  })
 
-    // ✅ Toast Function
-    function showToast(message) {
-      const toast = document.createElement("div");
-      toast.innerText = message;
-      toast.className = "fixed top-5 right-5 bg-green-600 text-white px-4 py-2 rounded shadow z-50";
-      document.body.appendChild(toast);
-      setTimeout(() => {
-        toast.style.opacity = "0";
-        setTimeout(() => toast.remove(), 500);
-      }, 3000);
-    }
-  });
+  // ✅ Toast Function
+  function showToast(message) {
+    const toast = document.createElement("div");
+    toast.innerText = message;
+    toast.className = "fixed top-5 right-5 bg-green-600 text-white px-4 py-2 rounded shadow z-50";
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      setTimeout(() => toast.remove(), 500);
+    }, 3000);
+  }
+
 </script>
 {% endblock %}
