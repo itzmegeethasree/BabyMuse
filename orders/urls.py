@@ -9,8 +9,11 @@ urlpatterns = [
     path('order/', views.order_list_view, name='order'),
     path('order_detail/<int:order_id>/',
          views.order_detail_view, name='order_detail'),
+    path('order_cancel_item/<int:item_id>/',
+         views.cancel_item, name='cancel_item'),
     path('order_cancel/<int:order_id>/',
-         views.cancel_order, name='order_cancel'),
+         views.order_cancel, name='order_cancel'),
+
     path('return/<int:order_id>/', views.return_order, name='return_order'),
     path('invoice/<int:order_id>/',
          views.download_invoice, name='download_invoice'),

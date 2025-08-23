@@ -38,17 +38,17 @@ urlpatterns = [
 
 
 
-    # # Orders
-    # path('orders/', views.admin_orders, name='admin_orders'),
-    # path('orders/<int:order_id>/', views.admin_order_detail,
-    #      name='admin_order_detail'),
-    # path('orders/<int:order_id>/invoice/',
-    #      views.order_invoice, name='admin_order_invoice'),
-    # path('orders/<int:order_id>/change-status/',
-    #      views.change_order_status, name='admin_change_order_status'),
-    # path('returns/', views.admin_return_requests, name='admin_return_requests'),
-    # path('returns/<int:return_id>/verify/',
-    #      views.verify_return_request, name='verify_return_request'),
+    # Orders
+    path('orders/', views.admin_orders, name='admin_orders'),
+    path('orders/<int:order_id>/', views.admin_order_detail,
+         name='admin_order_detail'),
+    path('orders/<int:order_id>/invoice/',
+         views.order_invoice, name='admin_order_invoice'),
+    path('orders/<int:item_id>/change-status/',
+         views.change_item_status, name='admin_change_item_status'),
+    path('returns/', views.admin_return_requests, name='admin_return_requests'),
+    path('returns/<int:return_id>/verify/',
+         views.verify_return_request, name='verify_return_request'),
 
 
     # Products
@@ -59,31 +59,38 @@ urlpatterns = [
     path('products/<int:product_id>/toggle/',
          views.admin_toggle_product_visibility, name='admin_toggle_product'),
 
-    # # coupons
-    # path('coupons/', views.coupon_list, name='admin-coupon-list'),
-    # path('coupons/create/', views.coupon_create,
-    #      name='admin-coupon-create'),
-    # path('coupons/edit/<int:coupon_id>/',
-    #      views.coupon_edit, name='admin-coupon-edit'),
-    # path('coupons/delete/<int:coupon_id>/',
-    #      views.coupon_delete, name='admin-coupon-delete'),
+    # coupons
+    path('coupons/', views.coupon_list, name='admin-coupon-list'),
+    path('coupons/create/', views.coupon_create,
+         name='admin-coupon-create'),
+    path('coupons/edit/<int:coupon_id>/',
+         views.coupon_edit, name='admin-coupon-edit'),
+    path('coupons/delete/<int:coupon_id>/',
+         views.coupon_delete, name='admin-coupon-delete'),
 
     # # offer
     path('product-offers/', views.product_offer_list, name='product_offer_list'),
     path('product-offers/<int:product_id>/update/',
          views.update_product_offer, name='update_product_offer'),
-    # path('category-offers/', views.category_offer_list,
-    #      name='category_offer_list'),
-    # path('category-offers/<int:category_id>/update/',
-    #      views.update_category_offer, name='update_category_offer'),
-    # # report
+    path('category-offers/', views.category_offer_list,
+         name='category_offer_list'),
+    path('category-offers/<int:category_id>/update/',
+         views.update_category_offer, name='update_category_offer'),
+    # report
 
 
-    # path('sales_report/', views.sales_report_view, name='sales_report'),
-    # path('sales-report/pdf/', views.download_sales_report_pdf,
-    #      name='sales_report_pdf'),
-    # path('sales-report/excel/', views.download_sales_report_excel,
-    #      name='sales_report_excel'),
+    path('sales_report/', views.sales_report_view, name='sales_report'),
+    path('sales-report/pdf/', views.download_sales_report_pdf,
+         name='sales_report_pdf'),
+    path('sales-report/excel/', views.download_sales_report_excel,
+         name='sales_report_excel'),
 
+    # Banners
 
+    path('banners/', views.banner_list, name='banner_list'),
+    path('banners/create/', views.banner_create, name='banner_create'),
+    path('banners/<int:banner_id>/edit/',
+         views.banner_edit, name='banner_edit'),
+    path('banners/<int:banner_id>/delete/',
+         views.banner_delete, name='banner_delete'),
 ]

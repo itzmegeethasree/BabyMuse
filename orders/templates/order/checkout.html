@@ -51,10 +51,10 @@
             {% for item in cart_items %}
             <tr>
               <td class="p-3 flex items-center gap-3">
-                <img src="{{ item.product.primary_image }}" alt="{{ item.product.name }}"
+                <img src="{{ item.product_variant.product.primary_image }}" alt="{{ item.product.name }}"
                   class="w-20 h-20 object-cover rounded-md">
                 <div>
-                  <div class="font-semibold text-gray-800">{{ item.product.name }}</div>
+                  <div class="font-semibold text-gray-800">{{ item.product_variant.product.name }}</div>
                   {% with offer=item.product.get_active_offer %}
                   {% if offer.1 > 0 %}
                   <span class="text-xs text-green-700">{{ offer.1 }}% OFF - {{ offer.0 }}</span>
@@ -69,17 +69,18 @@
                 {% with offer=item.product.get_active_offer %}
                 {% if offer.1 > 0 %}
                 <div class="text-pink-600 font-semibold">
-                  ₹{{ item.product.get_offer_price|floatformat:0 }}
-                  <span class="text-gray-400 line-through text-xs ml-1">₹{{ item.product.price|floatformat:0 }}</span>
+                  ₹{{ item.product_variant.get_offer_price|floatformat:0 }}
+                  <span class="text-gray-400 line-through text-xs ml-1">₹{{
+                    item.product_variant.price|floatformat:0 }}</span>
                 </div>
                 {% else %}
-                <div class="text-gray-700">₹{{ item.product.price|floatformat:0 }}</div>
+                <div class="text-gray-700">₹{{ item.product_variant.price|floatformat:0 }}</div>
                 {% endif %}
                 {% endwith %}
               </td>
 
               <td class="p-3 font-semibold">
-                ₹{{ item.product.get_offer_price|mul:item.quantity|floatformat:2 }}
+                ₹{{ item.product_variant.get_offer_price|mul:item.quantity|floatformat:2 }}
               </td>
             </tr>
             {% endfor %}

@@ -2,15 +2,15 @@
   <h2 class="text-xl font-bold mb-6 text-pink-600">BabyMuse Admin</h2>
   <ul class="space-y-4">
     <li><a href="{% url 'admin_panel:admin_dashboard' %}" class="hover:text-pink-500">Dashboard</a></li>
-    <li><a href="" class="hover:text-pink-500">Orders</a></li>
+    <li><a href="{% url 'admin_panel:admin_orders' %}" class="hover:text-pink-500">Orders</a></li>
     <li><a href="{% url 'admin_panel:admin_products' %}">Products</a></li>
     <li><a href="{% url 'admin_panel:admin_customer_list' %}">Customers</a></li>
     <li><a href="">Coupons</a></li>
     <li><a href="{% url 'admin_panel:category_list' %}">Categories</a></li>
-    <li><a href="">Refund/Return</a></li>
+    <li><a href="{% url 'admin_panel:admin_return_requests' %}">Refund/Return</a></li>
     <li><a href="{% url 'admin_panel:product_offer_list' %}">Product Offers</a></li>
     <li><a href="">Sales Report</a></li>
-    <li>Banners</li>
+    <li><a href="{% url 'admin_panel:banner_list' %}">Banners</a></li>
     </li>
     <li><a href="{% url 'admin_panel:custom_admin_logout' %}" class="text-red-600">Sign Out</a></li>
   </ul>

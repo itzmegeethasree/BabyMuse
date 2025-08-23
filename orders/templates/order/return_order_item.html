@@ -1,0 +1,45 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto p-6 bg-white shadow-md rounded-md">
+    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Return Item</h2>
+
+    <!-- Item Summary -->
+    <div class="flex items-center gap-4 mb-6">
+        <img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="w-24 h-24 object-cover rounded">
+        <div>
+            <h3 class="text-lg font-medium">{{ item.product.name }}</h3>
+            <p class="text-sm text-gray-600">Qty: {{ item.quantity }}</p>
+            <p class="text-sm text-gray-600">Price: ₹{{ item.price }}</p>
+            <p class="text-sm text-gray-600">Status: {{ item.status }}</p>
+        </div>
+    </div>
+
+    <!-- Return Form -->
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <label for="reason" class="block text-sm font-medium text-gray-700">Reason for Return</label>
+        <select name="reason" id="reason" class="w-full border-gray-300 rounded-md shadow-sm">
+            <option value="">-- Select a reason --</option>
+            <option value="Wrong item delivered">Wrong item delivered</option>
+            <option value="Item damaged">Item damaged</option>
+            <option value="Not as described">Not as described</option>
+            <option value="Changed my mind">Changed my mind</option>
+            <option value="Other">Other</option>
+        </select>
+
+        <label for="comments" class="block text-sm font-medium text-gray-700">Additional Comments (optional)</label>
+        <textarea name="comments" id="comments" rows="4" class="w-full border-gray-300 rounded-md shadow-sm"></textarea>
+
+        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+            Submit Return Request
+        </button>
+    </form>
+
+    <div class="mt-6 text-sm text-gray-500">
+        <p>Need help? <a href="{% url 'support:contact' %}" class="text-blue-600 hover:underline">Contact support</a>
+        </p>
+    </div>
+</div>
+{% endblock %}

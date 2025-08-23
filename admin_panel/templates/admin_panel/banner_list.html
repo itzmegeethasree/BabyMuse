@@ -1,0 +1,67 @@
+{% extends 'admin_panel/base.html' %}
+{% block content %}
+
+<div class="max-w-6xl mx-auto bg-white shadow-md rounded-lg p-6">
+    <h2 class="text-2xl font-semibold mb-6 text-gray-800">Manage Banners</h2>
+
+    <div class="flex justify-end mb-4">
+        <a href="{% url 'admin_panel:banner_create' %}"
+            class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+            ➕ Add Banner
+        </a>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-100 text-gray-700 text-sm uppercase tracking-wider">
+                <tr>
+                    <th class="px-4 py-3 text-left">Image</th>
+                    <th class="px-4 py-3 text-left">Title</th>
+                    <th class="px-4 py-3 text-left">Gender</th>
+                    <th class="px-4 py-3 text-left">Age Range</th>
+                    <th class="px-4 py-3 text-left">Status</th>
+                    <th class="px-4 py-3 text-left">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for banner in banners %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3">
+                        {% if banner.image %}
+                        <img src="{{ banner.image.url }}" class="h-16 w-auto rounded shadow border">
+                        {% else %}
+                        <span class="text-gray-400 italic">No image</span>
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 font-medium text-gray-800">{{ banner.title }}</td>
+                    <td class="px-4 py-3">{{ banner.gender }}</td>
+                    <td class="px-4 py-3">{{ banner.age_min }}–{{ banner.age_max }}</td>
+                    <td class="px-4 py-3">
+                        <span class="inline-block px-2 py-1 rounded text-xs font-semibold
+              {% if banner.is_active %}
+                bg-green-100 text-green-800
+              {% else %}
+                bg-red-100 text-red-800
+              {% endif %}
+            ">
+                            {{ banner.is_active|yesno:"Active,Inactive" }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 space-x-2">
+                        <a href="{% url 'admin_panel:banner_edit' banner.id %}" class="text-blue-600 hover:underline">✏️
+                            Edit</a>
+                        <a href="{% url 'admin_panel:banner_delete' banner.id %}" class="text-red-600 hover:underline"
+                            onclick="return confirm('Delete this banner?')">🗑️ Delete</a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="px-4 py-6 text-center text-gray-500 italic">No banners found.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}

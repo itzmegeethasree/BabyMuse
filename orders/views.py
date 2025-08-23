@@ -1,3 +1,5 @@
+from .models import Order, OrderItem
+from django.shortcuts import get_object_or_404, redirect, render
 from datetime import timezone
 import json
 from django.shortcuts import render, redirect, get_object_or_404
@@ -52,14 +54,14 @@ from orders.models import Coupon
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
-import razorpay
 from django.conf import settings
 
 
 @login_required
 def checkout_view(request):
     user = request.user
-    cart_items = CartItem.objects.filter(user=user).select_related('product')
+    cart_items = CartItem.objects.filter(
+        user=user).select_related('product_variant', 'product_variant__product')
 
     if not cart_items.exists():
         messages.warning(request, "Your cart is empty.")
@@ -68,19 +70,20 @@ def checkout_view(request):
     # Check product availability
     unavailable_products = []
     for item in cart_items:
-        product = item.product
-        if not product or product.stock < item.quantity or product.is_deleted:
+        variant = item.product_variant
+        product = variant.product
+        if not variant or variant.stock < item.quantity or product.is_deleted:
             unavailable_products.append(
-                product.name if product else "Unknown product")
+                variant.product.name if variant else "Unknown product")
 
     if unavailable_products:
         messages.error(
             request, f"The following items are unavailable: {', '.join(unavailable_products)}")
-        return redirect('shop:cart')
+        return redirect('cart')
 
     # Price calculation
-    subtotal = sum(item.product.get_offer_price() *
-                   item.quantity for item in cart_items)
+    subtotal = sum(item.product_variant.get_offer_price()
+                   * item.quantity for item in cart_items)
     shipping = Decimal('50.00') if subtotal < 500 else Decimal('0.00')
     tax = subtotal * Decimal('0.05')
     discount = Decimal('0.00')
@@ -123,23 +126,24 @@ def checkout_view(request):
             coupon=coupon_obj,
             discount_amount=discount,
         )
-
+        print("Variant:", item.product_variant.product)
+        print("Offer Price:", item.product_variant.get_offer_price())
         for item in cart_items:
             OrderItem.objects.create(
                 order=order,
-                product=item.product,
+                product=item.product_variant.product,
+                product_variant=item.product_variant,
                 quantity=item.quantity,
-                price=item.product.price,
+                price=item.product_variant.get_offer_price(),
             )
 
         if payment_method == 'COD':
             order.is_paid = True
-            order.status = "Confirmed"
             order.save()
 
             for item in cart_items:
-                item.product.stock -= item.quantity
-                item.product.save()
+                item.product_variant.stock -= item.quantity
+                item.product_variant.save()
 
             cart_items.delete()
             request.session.pop('applied_coupon', None)
@@ -249,9 +253,9 @@ def razorpay_success(request):
         order.status = "Confirmed"
         order.save()
 
-        for item in order.orderitem_set.select_related('product'):
+        for item in order.items.select_related('product'):
             if item.product:
-                item.product.stock -= item.quantity
+                item.product_variant.stock -= item.quantity
                 item.product.save()
 
         CartItem.objects.filter(user=request.user).delete()
@@ -278,6 +282,8 @@ def razorpay_success(request):
     except Order.DoesNotExist:
         return JsonResponse({
             'status': 'failure',
+            'order_id': data.get('order_id'),
+
             'message': 'Order not found',
             'redirect_url': "/orders/payment_failed/"
         })
@@ -319,18 +325,18 @@ def order_success(request, order_id):
 
     unavailable_items = []
 
-    # Check for stock or product deletion after order placement
-    for item in order.orderitem_set.select_related('product').all():
-        product = item.product
+    # Go through OrderItems (using related_name='items') and get related Product via ProductVariant
+    for item in order.items.select_related('product_variant__product'):
+        product = item.product_variant.product
 
-        if not product or product.is_deleted or product.stock < item.quantity:
+        if not product or product.is_deleted or item.product_variant.stock < item.quantity:
             unavailable_items.append({
                 'name': product.name if product else "Unknown Product",
                 'ordered_qty': item.quantity,
-                'available_stock': product.stock if product else 0,
+                'available_stock': item.product_variant.stock if product else 0,
                 'status': (
                     "Unlisted" if product and product.is_deleted else
-                    "Out of Stock" if not product or product.stock == 0 else
+                    "Out of Stock" if not product or item.product_variant.stock == 0 else
                     "Limited Stock"
                 )
             })
@@ -374,30 +380,75 @@ def order_detail_view(request, order_id):
 
 
 @login_required
-def cancel_order(request, order_id):
-    order = get_object_or_404(Order, id=order_id, user=request.user)
+def cancel_item(request, item_id):
+    item = get_object_or_404(OrderItem, id=item_id, order__user=request.user)
+    if item.status not in ['Pending', 'Processing']:
+        messages.error(request, "This item cannot be cancelled.")
+        return redirect('orders:order_detail', order_id=item.order.id)
 
     if request.method == 'POST':
-        reason = request.POST.get('reason', '')
+        reason_select = request.POST.get('reason_select', '')
+        reason_text = request.POST.get('reason_text', '')
+        reason = f"{reason_select} - {reason_text}".strip(" -")
+        item.status = 'Cancelled'
+        item.product_variant.stock += item.quantity
+        item.product_variant.save()
+        item.save()
+        item.order.update_status_from_items()
+
+        if item.order.payment_method != 'COD':
+            user = request.user
+            user.wallet.balance += item.subtotal()
+            user.wallet.save()
+            messages.success(
+                request, f"Item cancelled and ₹{item.subtotal()} refunded to your wallet.")
+        else:
+            messages.success(
+                request, "Item cancelled. No refund needed for COD orders.")
+
+        return redirect('orders:order_detail', order_id=item.order.id)
+    orderid = item.order.id
+    return render(request, 'order/cancel_order_item.html', {'item': item, 'orderid': orderid})
+
+
+@login_required
+def order_cancel(request, order_id):
+    order = get_object_or_404(Order, id=order_id, user=request.user)
+
+    # Only allow cancellation if all items are still cancellable
+    cancellable_statuses = ['Pending', 'Processing']
+    if not all(item.status in cancellable_statuses for item in order.items.all()):
+        messages.error(
+            request, "Some items have already been shipped or delivered. Full cancellation not allowed.")
+        return redirect('orders:order_detail', order_id=order.id)
+
+    if request.method == 'POST':
+        reason_select = request.POST.get('reason_select', '')
+        reason_text = request.POST.get('reason_text', '')
+        reason = f"{reason_select} - {reason_text}".strip(" -")
+        total_refund = 0
+
+        for item in order.items.all():
+            item.status = 'Cancelled'
+            item.product_variant.stock += item.quantity
+            item.product_variant.save()
+            total_refund += item.subtotal()
+            item.save()
+
         order.status = 'Cancelled'
         order.save()
 
-        # Increment stock
-        for item in order.orderitem_set.all():
-            item.product.stock += item.quantity
-            item.product.save()
-
         if order.payment_method != 'COD':
             user = request.user
-            user.wallet_balance += order.total_price
+            user.wallet.balance += total_refund
             user.save()
             messages.success(
-                request, f"Order #{order.id} cancelled and amount refunded to your wallet.")
+                request, f"Order #{order.id} cancelled. ₹{total_refund} refunded to your wallet.")
         else:
             messages.success(
-                request, f"Order #{order.id} cancelled. No payment was collected, so no refund issued.")
+                request, f"Order #{order.id} cancelled. No refund needed for COD orders.")
 
-        return redirect('orders:order')
+        return redirect('orders:order_list')
 
     return render(request, 'order/cancel_order.html', {'order': order})
 
@@ -418,8 +469,9 @@ def search_orders(request):
 def return_order(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
 
-    if order.status != 'Delivered':
-        messages.error(request, "Only delivered orders can be returned.")
+    # Only allow full return if all items are delivered and not already returned
+    if not all(item.status == 'Delivered' for item in order.items.all()):
+        messages.error(request, "Only fully delivered orders can be returned.")
         return redirect('orders:order_detail', order_id=order.id)
 
     if request.method == 'POST':
@@ -427,11 +479,41 @@ def return_order(request, order_id):
         if not reason:
             messages.error(request, "Please provide a return reason.")
         else:
+            # Create a return request and mark items as returned
             ReturnRequest.objects.create(order=order, reason=reason)
-            messages.success(request, "Return request submitted successfully.")
+            for item in order.items.all():
+                item.status = 'Returned'
+                item.save()
+            order.update_status_from_items()
+            messages.success(
+                request, "Return request submitted for the entire order.")
             return redirect('orders:order_detail', order_id=order.id)
 
     return render(request, 'order/return_order.html', {'order': order})
+
+
+@login_required
+def return_order_item(request, item_id):
+    item = get_object_or_404(OrderItem, id=item_id, order__user=request.user)
+
+    if item.status != 'Delivered':
+        messages.error(request, "Only delivered items can be returned.")
+        return redirect('orders:order_detail', order_id=item.order.id)
+
+    if request.method == 'POST':
+        reason = request.POST.get('reason', '').strip()
+        if not reason:
+            messages.error(request, "Please provide a return reason.")
+        else:
+            item.status = 'Returned'
+            item.save()
+            ReturnRequest.objects.create(order=item.order, reason=reason)
+            item.order.update_status_from_items()
+            messages.success(
+                request, f"Return request submitted for item #{item.id}.")
+            return redirect('orders:order_detail', order_id=item.order.id)
+
+    return render(request, 'order/return_order_item.html', {'item': item})
 
 
 def download_invoice(request, order_id):

@@ -1,4 +1,11 @@
-from .forms import ProductForm, ProductOfferForm, VariantComboForm, CategoryOfferForm
+from core.models import Banner
+from orders.models import OrderItem, ORDER_STATUS
+from admin_panel.decorators import admin_login_required
+from django.shortcuts import get_object_or_404, redirect
+import csv
+from django.http import HttpResponse
+from orders.models import ORDER_STATUS, Coupon, Order, OrderItem, ReturnRequest
+from .forms import BannerForm, CouponForm, ProductForm, ProductOfferForm, VariantComboForm, CategoryOfferForm
 from django.utils.text import slugify
 import json
 from django.views.decorators.csrf import csrf_exempt
@@ -20,27 +27,12 @@ from django.core.paginator import Paginator
 from django.db.models import Sum, Q, Prefetch
 import base64
 from django.core.files.base import ContentFile
-
-
-# from orders.models import Order, ORDER_STATUS, OrderItem, ReturnRequest
-# from django.shortcuts import redirect, get_object_or_404
-# import xlsxwriter
-# from django.contrib.admin.views.decorators import staff_member_required
-# from django.template.loader import render_to_string
-# from django.utils.dateparse import parse_date
-# from django.http import HttpResponse, FileResponse
-# from shop.models import Product, Category, ProductImage
-# from django.http import HttpResponse
-# from .forms import ProductForm, CouponForm
-# from shop.forms import CategoryForm, CategoryOfferForm, ProductOfferForm
-# from io import BytesIO
-# from django.core.files.base import ContentFile
-# from PIL import Image
-# import csv
-# from django.core.exceptions import ObjectDoesNotExist
-# from orders.models import Coupon
-# from reportlab.lib.pagesizes import A4
-# from reportlab.pdfgen import canvas
+import xlsxwriter
+from django.utils.dateparse import parse_date
+from django.http import HttpResponse, FileResponse
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 
 User = get_user_model()
@@ -106,17 +98,17 @@ def admin_forgot_password(request):
 @admin_login_required
 def admin_dashboard(request):
     total_users = User.objects.count()
-    # total_products = Product.objects.count()
-    # total_orders = Order.objects.count()
-    # total_revenue = Order.objects.filter(status="paid").aggregate(
-    #     total=Sum('total_price'))['total'] or 0
-    # latest_orders = Order.objects.order_by('-created_at')[:5]
+    total_products = Product.objects.count()
+    total_orders = Order.objects.count()
+    total_revenue = Order.objects.filter(status="paid").aggregate(
+        total=Sum('total_price'))['total'] or 0
+    latest_orders = Order.objects.order_by('-created_at')[:5]
     return render(request, 'admin_panel/dashboard.html', {
         'total_users': total_users,
-        # 'total_products': total_products,
-        # 'total_orders': total_orders,
-        # 'total_revenue': total_revenue,
-        # 'latest_orders': latest_orders,
+        'total_products': total_products,
+        'total_orders': total_orders,
+        'total_revenue': total_revenue,
+        'latest_orders': latest_orders,
     })
 
 
@@ -556,38 +548,45 @@ def order_invoice(request, order_id):
 
 @admin_login_required
 @require_POST
-def change_order_status(request, order_id):
-    order = get_object_or_404(Order, id=order_id)
+def change_item_status(request, item_id):
+    item = get_object_or_404(OrderItem, id=item_id)
     new_status = request.POST.get('status')
+    reason = request.POST.get('reason', '').strip()  # Optional reason field
 
     valid_choices = dict(ORDER_STATUS).keys()
 
     if new_status in valid_choices:
-        # Allow special transitions like Cancelled, Failed, etc.
-        if order.status in ORDER_FLOW and new_status in ORDER_FLOW:
-            current_index = ORDER_FLOW.index(order.status)
+        # Prevent backward transitions if using ORDER_FLOW
+        if item.status in ORDER_FLOW and new_status in ORDER_FLOW:
+            current_index = ORDER_FLOW.index(item.status)
             new_index = ORDER_FLOW.index(new_status)
 
             if new_index < current_index:
                 messages.warning(
-                    request, "You can't move the status backward.")
-                return redirect('admin_panel:admin_order_detail', order_id=order.id)
+                    request, "You can't move the item status backward.")
+                return redirect('admin_panel:admin_order_detail', order_id=item.order.id)
 
-        # Restock if cancelled
-        if order.status != 'Cancelled' and new_status == 'Cancelled':
-            for item in order.orderitem_set.all():
-                item.product.stock += item.quantity
-                item.product.save()
+        # Restock logic only if item is being cancelled and wasn't already
+        if item.status not in ['Cancelled', 'Returned'] and new_status == 'Cancelled':
+            item.product_variant.stock += item.quantity
+            item.product_variant.save()
 
-        order.status = new_status
-        order.save()
+        # Update item status and optional reason
+        previous_status = item.status
+        item.status = new_status
+        if reason:
+            item.status_reason = reason  # If you have a field like this
+        item.save()
+
+        # Recalculate overall order status
+        item.order.update_status_from_items()
+
         messages.success(
-            request, f"Order #{order.id} status updated to {new_status}")
-
+            request, f"Item #{item.id} status updated to {new_status}")
     else:
         messages.error(request, "Invalid status selected.")
 
-    return redirect('admin_panel:admin_order_detail', order_id=order.id)
+    return redirect('admin_panel:admin_order_detail', order_id=item.order.id)
 
 
 @admin_login_required
@@ -605,24 +604,36 @@ def verify_return_request(request, return_id):
     return_request.approved = True
     return_request.save()
 
-    # Refund full order amount to user's wallet
-    user.wallet_balance += order.total_price
+    # Determine which items were returned
+    returned_items = order.items.filter(status='Returned')
+
+    if not returned_items.exists():
+        messages.error(request, "No items marked as returned in this order.")
+        return redirect('admin_panel:admin_return_requests')
+
+    # Calculate refund amount
+    refund_amount = sum(item.subtotal for item in returned_items)
+
+    # Refund to user's wallet
+    user.wallet.balance += refund_amount
     user.save()
 
-    # Restock all products in the order
-    for item in OrderItem.all():
-        item.product.stock += item.quantity
+    # Restock returned items
+    for item in returned_items:
+        item.product_variant.stock += item.quantity
         item.product.save()
 
     messages.success(
-        request, f"₹{order.total_price} has been refunded to {user.username}'s wallet.")
+        request,
+        f"₹{refund_amount} has been refunded to {user.username}'s wallet for returned items."
+    )
     return redirect('admin_panel:admin_return_requests')
 
 
 @admin_login_required
 def admin_return_requests(request):
     return_requests = ReturnRequest.objects.select_related(
-        'order__user').order_by('-created_at')
+        'order__user').prefetch_related('order__items').order_by('-created_at')
     return render(request, 'admin_panel/return_request.html', {'return_requests': return_requests})
 
 # product management
@@ -833,3 +844,38 @@ def download_sales_report_excel(request):
     workbook.close()
     output.seek(0)
     return FileResponse(output, as_attachment=True, filename='sales_report.xlsx')
+
+# Banners
+
+
+@admin_login_required
+def banner_list(request):
+    banners = Banner.objects.all().order_by('-created_at')
+    return render(request, 'admin_panel/banner_list.html', {'banners': banners})
+
+
+@admin_login_required
+def banner_create(request):
+    form = BannerForm(request.POST or None, request.FILES or None)
+    if form.is_valid():
+        form.save()
+        return redirect('admin_panel:banner_list')
+    return render(request, 'admin_panel/banner_form.html', {'form': form, 'action': 'Create'})
+
+
+@admin_login_required
+def banner_edit(request, banner_id):
+    banner = get_object_or_404(Banner, id=banner_id)
+    form = BannerForm(request.POST or None,
+                      request.FILES or None, instance=banner)
+    if form.is_valid():
+        form.save()
+        return redirect('admin_panel:banner_list')
+    return render(request, 'admin_panel/banner_form.html', {'form': form, 'action': 'Edit', 'banner': banner})
+
+
+@admin_login_required
+def banner_delete(request, banner_id):
+    banner = get_object_or_404(Banner, id=banner_id)
+    banner.delete()
+    return redirect('admin_panel:banner_list')

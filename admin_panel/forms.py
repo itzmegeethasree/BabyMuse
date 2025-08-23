@@ -1,4 +1,5 @@
 from django.forms import inlineformset_factory
+from core.models import Banner
 from shop.models import Product, ProductVariant, Category, VariantOption
 from django import forms
 from .widgets import MultiFileInput
@@ -233,3 +234,19 @@ class CouponForm(forms.ModelForm):
         valid_to = cleaned_data.get("valid_to")
         if valid_from and valid_to and valid_to <= valid_from:
             self.add_error("valid_to", "Valid to must be after valid from.")
+
+
+class BannerForm(forms.ModelForm):
+    class Meta:
+        model = Banner
+        fields = ['title', 'image', 'link',
+                  'is_active', 'age_min', 'age_max', 'gender']
+
+    def clean(self):
+        cleaned_data = super().clean()
+        age_min = cleaned_data.get('age_min')
+        age_max = cleaned_data.get('age_max')
+        if age_min and age_max and age_min > age_max:
+            raise forms.ValidationError(
+                "Minimum age cannot be greater than maximum age.")
+        return cleaned_data

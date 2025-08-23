@@ -7,6 +7,23 @@ class Banner(models.Model):
     link = models.URLField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    age_min = models.PositiveBigIntegerField(null=True, blank=True)
+    age_max = models.PositiveBigIntegerField(null=True, blank=True)
+    gender = models.CharField(max_length=10,
+                              choices=[('Male', 'Male'),
+                                       ('Female', 'Female'),
+                                       ('Unisex', 'Unisex')],
+                              default='Unisex')
+
+    def is_suitable_for(self, baby):
+        age = baby.age_in_months()
+        if age is None:
+            return False
+        return (
+            (self.age_min is None or age >= self.age_min) and
+            (self.age_max is None or age <= self.age_max) and
+            (self.gender == 'Unisex' or self.gender == baby.baby_gender)
+        )
 
     def __str__(self):
         return self.title

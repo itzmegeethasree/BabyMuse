@@ -12,11 +12,6 @@ ORDER_STATUS = [
     ('Processing', 'Processing'),
     ('Shipped', 'Shipped'),
     ('Delivered', 'Delivered'),
-    ('Cancelled', 'Cancelled'),
-    ('Paid', 'Paid'),
-    ('Refunded', 'Refunded'),
-    ('Returned', 'Returned'),
-    ('Failed', 'Failed'),
     ('Completed', 'Completed')
 ]
 
@@ -103,11 +98,57 @@ class Order(models.Model):
             self.order_id = f"BM{latest_id:06d}"  # BM000001 style
         super().save(*args, **kwargs)
 
+    def update_status_from_items(self):
+        item_statuses = list(self.items.values_list('status', flat=True))
+        unique_statuses = set(item_statuses)
+
+        if not item_statuses:
+            self.status = 'Pending'
+
+        elif unique_statuses == {'Delivered'}:
+            self.status = 'Delivered'
+
+        elif unique_statuses == {'Completed'}:
+            self.status = 'Completed'
+
+        elif unique_statuses == {'Cancelled'}:
+            self.status = 'Cancelled'
+
+        elif unique_statuses == {'Returned'}:
+            self.status = 'Returned'
+
+        elif unique_statuses == {'Shipped'}:
+            self.status = 'Shipped'
+
+        elif unique_statuses == {'Processing'}:
+            self.status = 'Processing'
+
+        elif 'Returned' in unique_statuses and len(unique_statuses) > 1:
+            self.status = 'Partially Returned'
+
+        elif 'Cancelled' in unique_statuses and len(unique_statuses) > 1:
+            self.status = 'Partially Cancelled'
+
+        elif 'Delivered' in unique_statuses and len(unique_statuses) > 1:
+            self.status = 'Partially Delivered'
+
+        else:
+            self.status = 'Processing'
+
+        self.save(update_fields=['status'])
+
     def __str__(self):
         return f"Order #{self.order_id or self.id} - {self.user.username}"
 
 
 class OrderItem(models.Model):
+    STATUS_CHOICES = [('Pending', 'Pending'),
+                      ('Processing', 'Processing'),
+                      ('Shipped', 'Shipped'),
+                      ('Delivered', 'Delivered'),
+                      ('Cancelled', 'Cancelled'),
+                      ('Returned', 'Returned'),
+                      ('Completed', 'Completed')]
     order = models.ForeignKey(
         Order, on_delete=models.CASCADE, related_name='items')
     product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True)
@@ -115,9 +156,15 @@ class OrderItem(models.Model):
         ProductVariant, on_delete=models.SET_NULL, null=True)
     quantity = models.PositiveIntegerField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
+    status = models.CharField(
+        max_length=20, choices=STATUS_CHOICES, default='Pending')
 
     def subtotal(self):
         return self.quantity * self.price
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        self.order.update_status_from_items()
 
 
 class ReturnRequest(models.Model):

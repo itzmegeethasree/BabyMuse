@@ -1,3 +1,4 @@
+from datetime import date
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.contrib.auth import get_user_model
@@ -15,7 +16,7 @@ class CustomUser(AbstractUser):
         upload_to='profile_images/', blank=True, null=True)
 
     referral_code = models.CharField(
-        max_length=100, unique=True, blank=True, null=True)
+        max_length=100, blank=True, null=True)
     referred_by = models.ForeignKey(
         'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='referrals')
 
@@ -48,6 +49,12 @@ class BabyProfile(models.Model):
     notes = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    def age_in_months(self):
+        if self.baby_dob:
+            delta = date.today() - self.baby_dob
+            return delta.days // 30
+        return None
 
 
 class Address(models.Model):

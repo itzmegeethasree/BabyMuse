@@ -3,26 +3,51 @@
 
 {% block content %}
 <!-- Hero Section -->
-<section class="bg-gradient-to-r from-pink-100 to-purple-100 py-12 text-center">
+<section class="bg-gradient-to-r from-pink-100 to-purple-100 py-8 text-center">
   {% if request.user.is_authenticated %}
   <h1 class="text-4xl font-bold text-pink-700">
     Welcome back, {{ request.user.first_name|default:request.user.username }}!
   </h1>
   <p class="mt-4 text-gray-700">We've curated personalized picks for your baby.</p>
-  <a href="{% url 'shop' %}"
-    class="mt-6 inline-block bg-pink-600 text-white px-6 py-3 rounded-full hover:bg-pink-700">Shop Now</a>
+  <a href="{% url 'shop' %}" class="mt-6 inline-block bg-pink-600 text-white px-6 py-3 rounded-full hover:bg-pink-700">
+    Shop Now
+  </a>
   {% else %}
   <h1 class="text-4xl font-bold text-pink-700">Welcome to BabyMuse 👶</h1>
   <p class="mt-4 text-gray-700">Discover gentle care and joyful essentials for your little one.</p>
   <a href="{% url 'user:user_login' %}"
-    class="mt-6 inline-block bg-pink-600 text-white px-6 py-3 rounded-full hover:bg-pink-700">Login to Personalize</a>
+    class="mt-6 inline-block bg-pink-600 text-white px-6 py-3 rounded-full hover:bg-pink-700">
+    Login to Personalize
+  </a>
   {% endif %}
 </section>
 
+<!-- Banner Section -->
+{% if banners %}
+<section class="py-6 px-6 max-w-12xl mx-auto">
+  <div class="swiper">
+    <div class="swiper-wrapper">
+      {% for banner in banners %}
+      <div class="swiper-slide">
+        <div class="relative rounded-xl overflow-hidden shadow">
+          <img src="{{ banner.image.url }}" alt="{{ banner.title }}" class="w-full h-48 object-cover">
+          <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4">
+            <h3 class="text-lg font-semibold text-blue">{{ banner.title }}</h3>
+            <p class="text-sm text-gray-200">{{ banner.description }}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  </div>
+</section>
+{% endif %}
 <!-- Products Section -->
 <section class="py-10 px-6 max-w-6xl mx-auto">
   <h2 class="text-2xl font-semibold text-gray-800 mb-6">
-    {% if request.user.is_authenticated %}
+    {% if customized %}
     Recommended for You
     {% else %}
     Featured Products
@@ -30,78 +55,42 @@
   </h2>
 
   <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+    {% for item in products %}
+    {% with product=item.product variant=item.variant price=item.price %}
     <div class="bg-white p-4 rounded-xl shadow hover:shadow-lg transition relative group">
-      <img src=" {{ product.images.all.0.image.url }} " class="w-full h-40 object-cover rounded"
-        alt="{{ product.name }}">
+      <img src="{{ product.images.all.0.image.url }}" class="w-full h-40 object-cover rounded" alt="{{ product.name }}">
+      <h3 class="mt-2 font-medium text-gray-800 truncate">{{ product.name }}</h3>
+      <p class="text-sm text-gray-500">{{ product.category.name }}</p>
+      <p class="text-pink-600 font-semibold mt-1">₹{{ price }}</p>
 
-      <h3 class="mt-2 font-medium text-gray-800 truncate"></h3>
-      <p class="text-sm text-gray-500"></p>
-      <p class="text-pink-600 font-semibold mt-1"></p>
+      {% if variant %}
+      <p class="text-xs text-gray-400">Default: {{ variant.name }}</p>
+      {% endif %}
 
       <div class="flex justify-between items-center mt-3 text-sm">
-        <a href="" class="text-pink-500 hover:underline">View</a>
-
-        <!-- Wishlist Button -->
-        {% if request.user.is_authenticated %}
-        <form method="post" action="">
-          {% csrf_token %}
-          <button type="submit" class="text-red-500 hover:text-red-600" title="Add to Wishlist">
-            ❤️
-          </button>
-        </form>
-        {% else %}
-        <a href="" class="text-red-500 hover:text-red-600" title="Login to add to Wishlist">
-          ❤️
-        </a>
-        {% endif %}
-      </div>
-
-      <!-- Add to Cart Button -->
-      <div class="mt-3">
-        {% if request.user.is_authenticated %}
-        <form method="post" action="">
-          {% csrf_token %}
-          <button type="submit"
-            class="w-full bg-pink-500 hover:bg-pink-600 text-white py-1 rounded-full text-sm font-medium">
-            🛒 Add to Cart
-          </button>
-        </form>
-        {% else %}
-        <a href=""
-          class="block w-full bg-pink-500 hover:bg-pink-600 text-white py-1 rounded-full text-sm text-center font-medium">
-          🛒 Login to Add
-        </a>
-        {% endif %}
+        <a href="{% url 'product_detail' product.id %}" class="text-pink-500 hover:underline">View</a>
       </div>
 
     </div>
+    {% endwith %}
+    {% empty %}
     <p class="text-gray-500 text-sm">No products found.</p>
+    {% endfor %}
   </div>
 </section>
+
 <script>
-  document.querySelectorAll(".cart-btn").forEach(btn => {
-    btn.addEventListener("click", function () {
-      const pid = this.dataset.pid;
-      fetch("{% url 'ajax_add_to_cart' %}", {
-        method: "POST",
-        headers: {
-          "X-CSRFToken": "{{ csrf_token }}",
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-        body: new URLSearchParams({ product_id: pid }),
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.status === "success") {
-            this.innerText = "✅ Added";
-            document.getElementById("cart-count").innerText = data.cart_count;
-            showToast("🛒 Added to cart");
-          } else {
-            showToast("❌ " + (data.message || "Error"));
-          }
-        })
-        .catch(() => showToast("❌ Network error"));
-    });
-  });
+
+  function showToast(message) {
+    const toast = document.createElement("div");
+    toast.innerText = message;
+    toast.className = "fixed top-5 right-5 bg-green-600 text-white px-4 py-2 rounded shadow z-50";
+    document.body.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = "0";
+      setTimeout(() => toast.remove(), 500);
+    }, 3000);
+  }
+
 </script>
 {% endblock %}
