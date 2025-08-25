@@ -72,10 +72,6 @@ urlpatterns = [
     path('product-offers/', views.product_offer_list, name='product_offer_list'),
     path('product-offers/<int:product_id>/update/',
          views.update_product_offer, name='update_product_offer'),
-    path('category-offers/', views.category_offer_list,
-         name='category_offer_list'),
-    path('category-offers/<int:category_id>/update/',
-         views.update_category_offer, name='update_category_offer'),
     # report
 
 
@@ -93,4 +89,11 @@ urlpatterns = [
          views.banner_edit, name='banner_edit'),
     path('banners/<int:banner_id>/delete/',
          views.banner_delete, name='banner_delete'),
+    # Transactions
+    path('transactions/', views.wallet_transaction_list,
+         name='wallet_transaction_list'),
+    path('transaction/<int:tx_id>/',
+         views.wallet_transaction_detail, name='admin_wallet_transaction_detail')
+
+
 ]

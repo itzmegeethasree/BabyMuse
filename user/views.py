@@ -1,4 +1,7 @@
 import base64
+from decimal import Decimal
+
+from django.http import JsonResponse
 from .forms import AddressForm, BabyProfileForm, CustomUserCreationForm, CustomUserUpdateForm
 import uuid
 from django.contrib.auth import login
@@ -12,10 +15,12 @@ from django.core.mail import send_mail
 from django.utils import timezone
 from django.utils.timezone import now, timedelta
 from datetime import timezone as dt_timezone
-
+import razorpay
+from django.conf import settings
+from django.views.decorators.csrf import csrf_exempt
 
 from orders.models import Coupon
-from .models import Address, BabyProfile
+from .models import Address, BabyProfile, WalletTransaction
 from django.contrib.auth.decorators import login_required
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.contrib.auth import update_session_auth_hash
@@ -536,3 +541,49 @@ def delete_baby_profile(request, pk):
         baby.delete()
         return redirect('user:profile')
     return render(request, 'user/baby_profile_confirm_delete.html', {'baby': baby})
+
+
+@login_required
+def user_wallet_view(request):
+    wallet = request.user.wallet
+    transactions = wallet.transactions.order_by('-created_at')
+    return render(request, 'user/wallet.html', {'wallet': wallet,
+                                                'transactions': transactions,
+                                                'razor_pay_key_id': settings.RAZORPAY_KEY_ID})
+
+
+def create_wallet_order(request):
+    amount = int(request.POST.get('amount')) * 100  # Razorpay uses paise
+    client = razorpay.Client(
+        auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+    order = client.order.create({
+        'amount': amount,
+        'currency': 'INR',
+        'payment_capture': '1'
+    })
+    return JsonResponse({'order_id': order['id'], 'amount': amount})
+
+
+@csrf_exempt
+@login_required
+def wallet_payment_success(request):
+    if request.method == 'POST':
+        payment_id = request.POST.get('payment_id')
+        amount = int(request.POST.get('amount'))  # in paise
+
+        # Optional: verify payment with Razorpay API
+        # razorpay_client.payment.fetch(payment_id)
+
+        wallet = request.user.wallet
+        wallet.balance += Decimal(str(amount)) / \
+            Decimal(100)  # convert paise to rupees
+        wallet.save()
+
+        WalletTransaction.objects.create(
+            wallet=wallet,
+            transaction_type='Credit',
+            amount=amount / 100,
+            reason='Wallet Top-up'
+        )
+
+        return JsonResponse({'status': 'success'})

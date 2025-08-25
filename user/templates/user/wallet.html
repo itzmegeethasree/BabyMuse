@@ -1,0 +1,117 @@
+{% extends 'core/base.html' %}
+{% block content %}
+
+<section class="max-w-6xl mx-auto py-10 px-4">
+    <h2 class="text-2xl font-semibold mb-6">💰 Wallet Overview</h2>
+
+    <div class="flex flex-col md:flex-row gap-6">
+        {% include 'user/profile_sidebar.html' %}
+
+        <div class="flex-1 space-y-6">
+
+            <!-- Wallet Balance -->
+            <div class="bg-white p-6 rounded shadow">
+                <div class="flex items-center justify-between">
+                    <h3 class="text-lg font-medium text-gray-700">Your Wallet Balance</h3>
+                    <span class="text-2xl font-bold text-green-600">₹{{ wallet.balance }}</span>
+                </div>
+            </div>
+
+            <!-- Add Money to Wallet -->
+            <div class="bg-white p-6 rounded shadow">
+                <h4 class="text-md font-semibold mb-4 text-gray-800">Add Money to Wallet</h4>
+                <form id="wallet-topup-form" class="flex gap-4 items-center">
+                    <input type="number" name="amount" id="wallet-amount" min="1" placeholder="Enter amount"
+                        class="w-40 px-3 py-2 border rounded focus:outline-none focus:ring focus:border-blue-300"
+                        required>
+                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition">
+                        Add Money
+                    </button>
+                </form>
+            </div>
+
+            <!-- Transaction History -->
+            <div class="bg-white p-6 rounded shadow">
+                <h4 class="text-md font-semibold mb-4 text-gray-800">Transaction History</h4>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm text-left border border-gray-200">
+                        <thead class="bg-gray-100 text-gray-700">
+                            <tr>
+                                <th class="px-4 py-2 border-b">Date</th>
+                                <th class="px-4 py-2 border-b">Type</th>
+                                <th class="px-4 py-2 border-b">Amount</th>
+                                <th class="px-4 py-2 border-b">Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tx in transactions %}
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-4 py-2 border-b">{{ tx.created_at|date:"M d, Y H:i" }}</td>
+                                <td class="px-4 py-2 border-b">{{ tx.transaction_type }}</td>
+                                <td class="px-4 py-2 border-b {% if tx.transaction_type == 'Credit' %}text-green-700{% else %}text-red-600{% endif %}">
+                                                        ₹{{ tx.amount }}</td>                                
+                                <td class="px-4 py-2 border-b">{{ tx.reason }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="px-4 py-4 text-center text-gray-500">No transactions found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<!-- Razorpay Script -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+    document.getElementById('wallet-topup-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        const amount = document.getElementById('wallet-amount').value;
+
+        fetch("{% url 'user:create_order' %}", {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': '{{ csrf_token }}',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({ amount: amount })
+        })
+            .then(res => res.json())
+            .then(data => {
+                const options = {
+                    key: "{{ razor_pay_key_id }}",
+                    amount: data.amount,
+                    currency: "INR",
+                    name: "BabyMuse Wallet",
+                    order_id: data.order_id,
+                    handler: function (response) {
+                        fetch("{% url 'user:payment_success' %}", {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': '{{ csrf_token }}',
+                                'Content-Type': 'application/x-www-form-urlencoded'
+                            },
+                            body: new URLSearchParams({
+                                payment_id: response.razorpay_payment_id,
+                                amount: data.amount
+                            })
+                        }).then(() => location.reload());
+                    },
+                    modal: {
+                        ondismiss: function () {
+                            alert("Payment was cancelled or failed ,No money added to the wallet");
+                        }
+                    }
+                };
+                const rzp = new Razorpay(options);
+                rzp.open();
+            });
+    });
+</script>
+
+{% endblock %}

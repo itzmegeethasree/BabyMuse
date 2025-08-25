@@ -1,38 +1,58 @@
 {% extends 'core/base.html' %}
+
 {% block content %}
-<div class="max-w-xl mx-auto py-10">
-    <h2 class="text-2xl font-bold mb-4 text-red-600">❌ Cancel Order #{{ order.id }}</h2>
+<section class="max-w-6xl mx-auto py-10 px-4">
+    <h2 class="text-2xl font-bold mb-6 text-red-600">❌ Cancel Order #{{ order.id }}</h2>
 
-    <p class="mb-4">Are you sure you want to cancel this order?</p>
+    <div class="flex flex-col md:flex-row gap-6">
+        {% include 'user/profile_sidebar.html' %}
 
-    <form method="POST" class="space-y-4">
-        {% csrf_token %}
-        <div>
-            <div>
-                <label for="reason_select" class="block text-sm font-medium mb-1">Select a Reason for
-                    Cancellation:</label>
-                <select name="reason_select" id="reason_select" class="w-full border rounded p-2">
-                    <option value="">-- Choose a reason --</option>
-                    <option value="Ordered by mistake">Ordered by mistake</option>
-                    <option value="Found cheaper elsewhere">Found cheaper elsewhere</option>
-                    <option value="Delivery is delayed">Delivery is delayed</option>
-                    <option value="Product no longer needed">Product no longer needed</option>
-                    <option value="Other">Other</option>
-                </select>
-            </div>
+        <div class="flex-1">
+            <div class="bg-white p-6 rounded-lg shadow space-y-6">
+                <p class="text-gray-700">Are you sure you want to cancel this order? This action cannot be undone once
+                    processed.</p>
 
-            <div>
-                <label for="reason_text" class="block text-sm font-medium mt-4">Additional Comments (optional):</label>
-                <textarea name="reason_text" id="reason_text" rows="3" class="w-full border rounded p-2"
-                    placeholder="Write your reason..."></textarea>
+                <form method="POST" class="space-y-5">
+                    {% csrf_token %}
+
+                    <div>
+                        <label for="reason_select" class="block text-sm font-medium text-gray-700 mb-1">
+                            Select a Reason for Cancellation <span class="text-red-500">*</span>
+                        </label>
+                        <select name="reason_select" id="reason_select"
+                            class="w-full border rounded px-3 py-2 focus:outline-none focus:ring focus:border-blue-300"
+                            required>
+                            <option value="">-- Choose a reason --</option>
+                            <option value="Ordered by mistake">Ordered by mistake</option>
+                            <option value="Found cheaper elsewhere">Found cheaper elsewhere</option>
+                            <option value="Delivery is delayed">Delivery is delayed</option>
+                            <option value="Product no longer needed">Product no longer needed</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="reason_text" class="block text-sm font-medium text-gray-700 mb-1">
+                            Additional Comments (optional)
+                        </label>
+                        <textarea name="reason_text" id="reason_text" rows="3"
+                            class="w-full border rounded px-3 py-2 resize-none focus:outline-none focus:ring focus:border-blue-300"
+                            placeholder="Write your reason..."></textarea>
+                    </div>
+
+                    <div class="flex flex-wrap gap-4 pt-2">
+                        <button type="submit"
+                            class="bg-red-600 text-white px-6 py-2 rounded hover:bg-red-700 transition">
+                            Confirm Cancel
+                        </button>
+                        <a href="{% url 'orders:order_detail' orderid %}"
+                            class="text-blue-600 underline hover:text-blue-800 transition">
+                            Go Back
+                        </a>
+                    </div>
+                </form>
             </div>
         </div>
-
-        <div class="flex gap-4">
-            <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">Confirm
-                Cancel</button>
-            <a href="{% url 'orders:order_detail' orderid %}" class="text-blue-600 underline">Go Back</a>
-        </div>
-    </form>
-</div>
+    </div>
+</section>
 {% endblock %}

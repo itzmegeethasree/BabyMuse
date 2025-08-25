@@ -9,36 +9,47 @@ def home_view(request):
     customized = False
     product_data = []
     banners = Banner.objects.filter(is_active=True)
+    has_baby_profile = False
+    babies = None
 
     if request.user.is_authenticated:
         babies = request.user.babies.all()
+        has_baby_profile = babies.exists()
         age_gender_filters = []
 
-        for baby in babies:
-            age = baby.age_in_months()
-            gender = baby.baby_gender
-            age_gender_filters.append(
-                Q(min_age__lte=age, max_age__gte=age,
-                  gender__in=[gender, 'Unisex'])
-            )
+        if has_baby_profile:
+            for baby in babies:
+                age = baby.age_in_months()
+                gender = baby.baby_gender
+                age_gender_filters.append(
+                    Q(min_age__lte=age, max_age__gte=age,
+                      gender__in=[gender, 'Unisex'])
+                )
 
-        # Combine filters with OR
-        products_query = Q()
-        for f in age_gender_filters:
-            products_query |= f
+            # Combine filters with OR
+            products_query = Q()
+            for f in age_gender_filters:
+                products_query |= f
 
-        products = Product.objects.filter(
-            status='Active').filter(products_query).distinct()
+            products = Product.objects.filter(
+                status='Active').filter(products_query).distinct()
 
-        # Filter banners based on baby profile
-        personalized_banners = []
-        for baby in babies:
-            personalized_banners += [
-                b for b in banners if b.is_suitable_for(baby)]
-        banners = list(set(personalized_banners))
-        customized = True
+            # Filter banners based on baby profile
+            personalized_banners = []
+            for baby in babies:
+                personalized_banners += [
+                    b for b in banners if b.is_suitable_for(baby)
+                ]
+            banners = list(set(personalized_banners))
+            customized = True
+
+        else:
+            # No baby profile: show generic products and minimal banners
+            products = Product.objects.filter(status='Active')[:6]
+            banners = banners[:1]
 
     else:
+        # Anonymous user: show generic products and minimal banners
         products = Product.objects.filter(status='Active')[:6]
         banners = banners[:1]
 
@@ -56,7 +67,8 @@ def home_view(request):
         'products': product_data,
         'banners': banners,
         'customized': customized,
-        'baby': baby if request.user.is_authenticated else None,
+        'has_baby_profile': has_baby_profile,
+        'baby': babies.first() if has_baby_profile else None,
     })
 
 

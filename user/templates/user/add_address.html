@@ -1,81 +1,91 @@
 {% extends 'core/base.html' %}
 {% block content %}
-<section class="max-w-xl mx-auto py-10">
-    <h2 class="text-2xl font-semibold mb-4">{{ title }}</h2>
-    <a href="{% url 'user:address_book' %}" class="text-blue-600 underline">← Back </a>
 
-    <form method="POST" class="bg-white p-6 rounded shadow space-y-4">
-        {% csrf_token %}
+<section class="max-w-6xl mx-auto py-10 px-4">
 
-        <label class="block">
-            Name
-            <input type="text" name="name" value="{{ form.name.value|default:'' }}" required
-                class="w-full border rounded px-3 py-2" />
-            {% if form.name.errors %}
-            <p class="text-red-500 text-sm">{{ form.name.errors.0 }}</p>
-            {% endif %}
-        </label>
+    <div class="flex flex-col md:flex-row gap-6">
+        {% include 'user/profile_sidebar.html' %}
 
-        <label class="block">
-            Phone
-            <input type="text" name="phone" value="{{ form.phone.value|default:'' }}" required
-                class="w-full border rounded px-3 py-2" />
-            {% if form.phone.errors %}
-            <p class="text-red-500 text-sm">{{ form.phone.errors.0 }}</p>
-            {% endif %}
-        </label>
+        <div class="flex-1">
+            <h2 class="text-2xl font-semibold mb-6">{{ title }}</h2>
 
-        <label class="block">
-            Address Line 1
-            <textarea name="address_line1" required
-                class="w-full border rounded px-3 py-2">{{ form.address_line1.value|default:'' }}</textarea>
-            {% if form.address_line1.errors %}
-            <p class="text-red-500 text-sm">{{ form.address_line1.errors.0 }}</p>
-            {% endif %}
-        </label>
+            <a href="{% url 'user:address_book' %}" class="text-blue-600 underline mb-4 inline-block">← Back</a>
 
-        <label class="block">
-            Address Line 2 (Optional)
-            <input type="text" name="address_line2" value="{{ form.address_line2.value|default:'' }}"
-                class="w-full border rounded px-3 py-2" />
-        </label>
+            <form method="POST" class="bg-white p-6 rounded shadow space-y-4">
+                {% csrf_token %}
 
-        <label class="block">
-            City
-            <input type="text" name="city" value="{{ form.city.value|default:'' }}" required
-                class="w-full border rounded px-3 py-2" />
-            {% if form.city.errors %}
-            <p class="text-red-500 text-sm">{{ form.city.errors.0 }}</p>
-            {% endif %}
-        </label>
+                <label class="block">
+                    Name
+                    <input type="text" name="name" value="{{ form.name.value|default:'' }}" required
+                        class="w-full border rounded px-3 py-2" />
+                    {% if form.name.errors %}
+                    <p class="text-red-500 text-sm">{{ form.name.errors.0 }}</p>
+                    {% endif %}
+                </label>
 
-        <label class="block">
-            State
-            <input type="text" name="state" value="{{ form.state.value|default:'' }}" required
-                class="w-full border rounded px-3 py-2" />
-            {% if form.state.errors %}
-            <p class="text-red-500 text-sm">{{ form.state.errors.0 }}</p>
-            {% endif %}
-        </label>
+                <label class="block">
+                    Phone
+                    <input type="text" name="phone" value="{{ form.phone.value|default:'' }}" required
+                        class="w-full border rounded px-3 py-2" />
+                    {% if form.phone.errors %}
+                    <p class="text-red-500 text-sm">{{ form.phone.errors.0 }}</p>
+                    {% endif %}
+                </label>
 
-        <label class="block">
-            Postal Code
-            <input type="text" name="postal_code" value="{{ form.postal_code.value|default:'' }}" required
-                class="w-full border rounded px-3 py-2" />
-            {% if form.postal_code.errors %}
-            <p class="text-red-500 text-sm">{{ form.postal_code.errors.0 }}</p>
-            {% endif %}
-        </label>
+                <label class="block">
+                    Address Line 1
+                    <textarea name="address_line1" required
+                        class="w-full border rounded px-3 py-2">{{ form.address_line1.value|default:'' }}</textarea>
+                    {% if form.address_line1.errors %}
+                    <p class="text-red-500 text-sm">{{ form.address_line1.errors.0 }}</p>
+                    {% endif %}
+                </label>
 
-        <label class="inline-flex items-center">
-            <input type="checkbox" name="is_default" {% if form.is_default.value %}checked{% endif %} class="mr-2" />
-            Set as default address
-        </label>
+                <label class="block">
+                    Address Line 2 (Optional)
+                    <input type="text" name="address_line2" value="{{ form.address_line2.value|default:'' }}"
+                        class="w-full border rounded px-3 py-2" />
+                </label>
 
-        <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
-            Save Address
-        </button>
+                <label class="block">
+                    City
+                    <input type="text" name="city" value="{{ form.city.value|default:'' }}" required
+                        class="w-full border rounded px-3 py-2" />
+                    {% if form.city.errors %}
+                    <p class="text-red-500 text-sm">{{ form.city.errors.0 }}</p>
+                    {% endif %}
+                </label>
 
-    </form>
+                <label class="block">
+                    State
+                    <input type="text" name="state" value="{{ form.state.value|default:'' }}" required
+                        class="w-full border rounded px-3 py-2" />
+                    {% if form.state.errors %}
+                    <p class="text-red-500 text-sm">{{ form.state.errors.0 }}</p>
+                    {% endif %}
+                </label>
+
+                <label class="block">
+                    Postal Code
+                    <input type="text" name="postal_code" value="{{ form.postal_code.value|default:'' }}" required
+                        class="w-full border rounded px-3 py-2" />
+                    {% if form.postal_code.errors %}
+                    <p class="text-red-500 text-sm">{{ form.postal_code.errors.0 }}</p>
+                    {% endif %}
+                </label>
+
+                <label class="inline-flex items-center">
+                    <input type="checkbox" name="is_default" {% if form.is_default.value %}checked{% endif %}
+                        class="mr-2" />
+                    Set as default address
+                </label>
+
+                <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                    Save Address
+                </button>
+            </form>
+        </div>
+    </div>
 </section>
+
 {% endblock %}

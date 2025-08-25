@@ -1,3 +1,4 @@
+from user.models import WalletTransaction
 from core.models import Banner
 from orders.models import OrderItem, ORDER_STATUS
 from admin_panel.decorators import admin_login_required
@@ -590,6 +591,7 @@ def change_item_status(request, item_id):
 
 
 @admin_login_required
+@admin_login_required
 def verify_return_request(request, return_id):
     return_request = get_object_or_404(ReturnRequest, id=return_id)
     order = return_request.order
@@ -604,24 +606,33 @@ def verify_return_request(request, return_id):
     return_request.approved = True
     return_request.save()
 
-    # Determine which items were returned
+    # Get returned items
     returned_items = order.items.filter(status='Returned')
-
     if not returned_items.exists():
         messages.error(request, "No items marked as returned in this order.")
         return redirect('admin_panel:admin_return_requests')
 
     # Calculate refund amount
-    refund_amount = sum(item.subtotal for item in returned_items)
+    refund_amount = sum(item.subtotal() for item in returned_items)
 
-    # Refund to user's wallet
-    user.wallet.balance += refund_amount
-    user.save()
+    # Refund to wallet
+    wallet = user.wallet
+    wallet.balance += refund_amount
+    wallet.save()
 
-    # Restock returned items
+    # Log wallet transaction
+    WalletTransaction.objects.create(
+        wallet=wallet,
+        amount=refund_amount,
+        transaction_type='Credit',
+        reason='Refund for returned items',
+        related_order=order
+    )
+
+    # Restock items
     for item in returned_items:
         item.product_variant.stock += item.quantity
-        item.product.save()
+        item.product_variant.save()
 
     messages.success(
         request,
@@ -879,3 +890,18 @@ def banner_delete(request, banner_id):
     banner = get_object_or_404(Banner, id=banner_id)
     banner.delete()
     return redirect('admin_panel:banner_list')
+
+# wallet
+
+
+@admin_login_required
+def wallet_transaction_list(request):
+    transactions = WalletTransaction.objects.select_related(
+        'wallet__user').order_by('-created_at')
+    return render(request, 'admin_panel/wallet_transaction_list.html', {'transactions': transactions})
+
+
+@admin_login_required
+def wallet_transaction_detail(request, tx_id):
+    tx = get_object_or_404(WalletTransaction, id=tx_id)
+    return render(request, 'admin_panel/wallet_transaction_detail.html', {'tx': tx})

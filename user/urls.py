@@ -33,7 +33,10 @@ urlpatterns = [
          views.edit_baby_profile, name='edit_baby_profile'),
     path('baby-profile/<int:pk>/delete/',
          views.delete_baby_profile, name='delete_baby_profile'),
-
+    path('wallet/', views.user_wallet_view, name='user_wallet'),
+    path('wallet_add/', views.create_wallet_order, name='create_order'),
+    path('wallet_payment_success/',
+         views.wallet_payment_success, name='payment_success')
 
 
 

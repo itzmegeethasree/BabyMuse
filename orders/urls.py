@@ -15,10 +15,12 @@ urlpatterns = [
          views.order_cancel, name='order_cancel'),
 
     path('return/<int:order_id>/', views.return_order, name='return_order'),
+    path('retuen_item/<int:item_id>/',
+         views.return_order_item, name='return_item'),
     path('invoice/<int:order_id>/',
          views.download_invoice, name='download_invoice'),
     path('razorpay/success/', views.razorpay_success, name='razorpay_success'),
-    path('payment_failed/<int:order_id>',
+    path('payment_failed/<int:order_id>/',
          views.payment_failed_view, name='payment_failed'),
     path('mark-payment-failed/', views.mark_payment_failed,
          name='mark_payment_failed'),

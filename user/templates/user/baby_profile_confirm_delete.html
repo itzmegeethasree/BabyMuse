@@ -1,15 +1,27 @@
 {% extends 'core/base.html' %}
-{% block content %}
-<section class="max-w-xl mx-auto py-10 text-center">
-    <h2 class="text-xl font-semibold mb-4">Delete Baby Profile</h2>
-    <p>Are you sure you want to delete <strong>{{ baby.baby_name }}</strong>?</p>
 
-    <form method="POST" class="mt-4">
-        {% csrf_token %}
-        <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
-            Confirm Delete
-        </button>
-        <a href="{% url 'user:profile' %}" class="ml-4 text-blue-600 underline">Cancel</a>
-    </form>
+{% block content %}
+<section class="max-w-6xl mx-auto py-10 px-4">
+    <h2 class="text-2xl font-semibold mb-6">Delete Baby Profile</h2>
+
+    <div class="flex flex-col md:flex-row gap-6">
+        {% include 'user/profile_sidebar.html' %}
+
+        <div class="flex-1">
+            <div class="bg-white p-6 rounded shadow text-center">
+                <p class="text-lg mb-4">
+                    Are you sure you want to delete <strong class="text-red-600">{{ baby.baby_name }}</strong>?
+                </p>
+
+                <form method="POST" class="mt-4 inline-flex items-center justify-center gap-4">
+                    {% csrf_token %}
+                    <button type="submit" class="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700">
+                        Confirm Delete
+                    </button>
+                    <a href="{% url 'user:profile' %}" class="text-blue-600 underline">Cancel</a>
+                </form>
+            </div>
+        </div>
+    </div>
 </section>
 {% endblock %}

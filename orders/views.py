@@ -5,7 +5,7 @@ import json
 from django.shortcuts import render, redirect, get_object_or_404
 
 from shop.models import CartItem
-from user.models import Address
+from user.models import Address, Wallet, WalletTransaction
 from orders.models import Order, OrderItem, ReturnRequest
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -126,8 +126,6 @@ def checkout_view(request):
             coupon=coupon_obj,
             discount_amount=discount,
         )
-        print("Variant:", item.product_variant.product)
-        print("Offer Price:", item.product_variant.get_offer_price())
         for item in cart_items:
             OrderItem.objects.create(
                 order=order,
@@ -150,6 +148,35 @@ def checkout_view(request):
             request.session.pop('discount', None)
 
             return redirect('orders:order_success', order_id=order.id)
+        elif payment_method == 'WALLET':
+            wallet=Wallet.objects.get(user=user)
+            if wallet.balance >= total:
+                wallet.balance -= total
+                wallet.save()
+                order.is_paid = True
+                order.payment_method = 'Wallet'
+                order.save()
+                #wallet transaction
+                WalletTransaction.objects.create(
+                    wallet=wallet,
+                    amount=total,
+                    transaction_type='Debit',
+                    reason=f'paymentfor order #{order.id}',
+                    related_order=order
+                )
+
+                for item in cart_items:
+                    item.product_variant.stock -= item.quantity
+                    item.product_variant.save()
+
+                cart_items.delete()
+                request.session.pop('applied_coupon', None)
+                request.session.pop('discount', None)
+
+                return redirect('orders:order_success', order_id=order.id)
+            else:
+                messages.error(request, "Insufficient wallet balance.")
+                return redirect('orders:checkout')
 
         elif payment_method == 'RAZORPAY':
             client = razorpay.Client(
@@ -188,6 +215,7 @@ def checkout_view(request):
 @require_POST
 @login_required
 def ajax_apply_coupon(request):
+    
     code = request.POST.get('coupon_code', '').strip()
     user = request.user
 
@@ -285,7 +313,7 @@ def razorpay_success(request):
             'order_id': data.get('order_id'),
 
             'message': 'Order not found',
-            'redirect_url': "/orders/payment_failed/"
+            'redirect_url': "/orders/payment_failed/{order_id}/"
         })
 
 
@@ -309,7 +337,7 @@ def mark_payment_failed(request):
             return JsonResponse({
                 "status": "error",
                 "message": "Order not found",
-                "redirect_url": "/orders/payment_failed/"
+                "redirect_url": f"/orders/payment_failed/{order_id}/"
             }, status=404)
 
 

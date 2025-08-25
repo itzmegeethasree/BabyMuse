@@ -1,141 +1,105 @@
 {% extends 'core/base.html' %}
 {% load static %}
 {% block content %}
-<section class="max-w-3xl mx-auto py-10">
-    <h1 class="text-3xl font-semibold mb-6">👤 My Profile</h1>
+<section class="max-w-6xl mx-auto py-10 px-4">
+
+    <h1 class="text-3xl font-semibold mb-8">👤 My Profile</h1>
 
     {% if messages %}
     {% for message in messages %}
-    <p class="text-green-600 mb-2">{{ message }}</p>
+    <div class="bg-green-100 text-green-800 px-4 py-2 rounded mb-4 shadow">
+        {{ message }}
+    </div>
     {% endfor %}
     {% endif %}
 
-    <div class="bg-white shadow p-6 rounded-xl flex flex-col md:flex-row items-start gap-6">
-        <!-- Profile Image -->
-        <div class="flex-shrink-0">
-            {% if user.profile_image %}
-            <img src="{{ user.profile_image.url }}" alt="Profile Image"
-                class="w-32 h-32 rounded-full object-cover shadow">
-            {% else %}
-            <img src="{% static 'images/default_profile.png' %}" alt="Default"
-                class="w-32 h-32 rounded-full object-cover shadow">
-            {% endif %}
-        </div>
+    <div class="flex flex-col md:flex-row gap-6">
+        {% include 'user/profile_sidebar.html' %}
 
-        <!-- User Info -->
-        <div class="flex-1">
-            <p><strong>Full Name:</strong> {{ user.first_name }} {{ user.last_name }}</p>
-            <p><strong>Email:</strong> {{ user.email }}</p>
-            <p><strong>Phone:</strong> {{ user.phone }}</p>
-            <p><strong>Wallet Balance:</strong>₹{{ user.wallet_balance}}</p>
-            <hr class="my-4">
-            <p><strong>Joined:</strong> {{ user.date_joined|date:"F j, Y" }}</p>
-            <!-- Referral Code Section -->
-            <div class="bg-white shadow p-4 rounded mb-6">
-                <h2 class="text-xl font-semibold">📣 Invite & Earn</h2>
-                <p>Your Referral Code:
-                    <span class="font-mono bg-gray-100 px-2 py-1 rounded">{{ user.referral_code }}</span>
-                </p>
-                <p>Share this code with friends to earn a Coupon when they join.</p>
-            </div>
+        <!-- Main Profile Content -->
+        <div class="flex-1 space-y-10">
+            <!-- Profile Card -->
+            <div class="bg-white shadow p-6 rounded-xl flex flex-col md:flex-row items-start gap-6">
+                <!-- Profile Image -->
+                <div class="flex-shrink-0">
+                    {% if user.profile_image %}
+                    <img src="{{ user.profile_image.url }}" alt="Profile Image"
+                        class="w-32 h-32 rounded-full object-cover shadow">
+                    {% else %}
+                    <img src="{% static 'images/default_profile.png' %}" alt="Default"
+                        class="w-32 h-32 rounded-full object-cover shadow">
+                    {% endif %}
+                </div>
 
-            <!-- Referrals Tracking -->
-            <div class="bg-white shadow p-4 rounded mb-6">
-                <h2 class="text-xl font-semibold mb-2">👥 Your Referrals</h2>
-                {% if my_referrals %}
-                <ul class="list-disc pl-6">
-                    {% for r in my_referrals %}
-                    <li>{{ r.username }} - Joined on {{ r.date_joined|date:"M d, Y" }}</li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p>No referrals yet.</p>
-                {% endif %}
-            </div>
-
-            <!-- Earned Coupons -->
-            <div class="bg-white shadow p-4 rounded mb-6">
-                <h2 class="text-xl font-semibold mb-2">🎟 Earned Coupons</h2>
-                {% if my_coupons %}
-                <ul class="space-y-1">
-                    {% for coupon in my_coupons %}
-                    <li>
-                        <span class="font-semibold">{{ coupon.code }}</span>
-                        — ₹{{ coupon.discount_amount }} off, valid till {{ coupon.valid_to|date:"M d, Y" }}
-                    </li>
-                    {% endfor %}
-                </ul>
-                {% else %}
-                <p>No coupons yet.</p>
-                {% endif %}
-            </div>
-
-            <div class="mt-6 flex flex-wrap gap-4">
-                <a href="{% url 'user:edit_profile' %}"
-                    class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Edit Profile</a>
-                <a href="{% url 'user:change_password' %}"
-                    class="bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">Change Password</a>
-                <a href="{% url 'user:address_book' %}"
-                    class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Manage Addresses</a>
-                <a href="{% url 'orders:order'%}"
-                    class="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700">My
-                    Orders</a>
-                <a href="{% url 'user:add_baby_profile' %}"
-                    class="bg-yellow-600 text-white px-4 py-2 rounded hover:bg-purple-700">
-                    Add Baby
-                </a>
-
-            </div>
-        </div>
-    </div>
-
-    <!-- Address Overview -->
-    <div class="mt-10">
-        <h2 class="text-2xl font-semibold mb-4">🏠 Saved Addresses</h2>
-        {% if addresses %}
-        <div class="grid gap-4">
-            {% for address in addresses %}
-            <div class="border p-4 rounded-md bg-gray-50">
-                <p><strong>{{ address.name }}</strong> {% if address.is_default %}<span
-                        class="text-sm text-green-600">(Default)</span>{% endif %}</p>
-                <p>{{ address.phone }}</p>
-                <p>{{ address.address_line1 }}</p>
-                {% if address.address_line2 %}<p>{{ address.address_line2 }}</p>{% endif %}
-                <p>{{ address.city }}, {{ address.state }} - {{ address.postal_code }}</p>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <p class="text-gray-500">No addresses saved yet.</p>
-        {% endif %}
-    </div>
-    <!-- Baby Profiles Section -->
-    <div class="mt-10">
-        <h2 class="text-2xl font-semibold mb-4">👶 Baby Profiles</h2>
-
-
-        {% if baby_profiles %}
-        <div class="grid gap-4">
-            {% for baby in baby_profiles %}
-            <div class="border p-4 rounded-md bg-white shadow-sm">
-                <p><strong>Name:</strong> {{ baby.baby_name|default:"N/A" }}</p>
-                <p><strong>DOB:</strong> {{ baby.baby_dob|date:"M d, Y"|default:"N/A" }}</p>
-                <p><strong>Gender:</strong> {{ baby.baby_gender|default:"N/A" }}</p>
-                <p><strong>Weight:</strong> {{ baby.birth_weight|default:'' }} kg </p>
-                <p><strong>Height:</strong> {{ baby.birth_height |default:''}} cm</p>
-                {% if baby.notes %}<p><strong>Notes:</strong> {{ baby.notes }}</p>{% endif %}
-
-                <div class="mt-3 flex gap-2">
-                    <a href="{% url 'user:edit_baby_profile' baby.id %}" class="text-blue-600 underline">Edit</a>
-                    <a href="{% url 'user:delete_baby_profile' baby.id %}" class="text-red-600 underline">Delete</a>
+                <!-- User Info -->
+                <div class="flex-1">
+                    <p><strong>Full Name:</strong> {{ user.first_name }} {{ user.last_name }}</p>
+                    <p><strong>Email:</strong> {{ user.email }}</p>
+                    <p><strong>Phone:</strong> {{ user.phone }}</p>
+                    <p><strong>Wallet Balance:</strong> ₹{{ user.wallet.balance }}</p>
+                    <hr class="my-4">
+                    <p><strong>Joined:</strong> {{ user.date_joined|date:"F j, Y" }}</p>
                 </div>
             </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <p class="text-gray-500">No baby profiles added yet.</p>
-        {% endif %}
-    </div>
 
+
+            <!-- Addresses -->
+            <div id="addresses">
+                <h2 class="text-2xl font-semibold mb-4">🏠 Saved Addresses</h2>
+                {% if addresses %}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% for address in addresses %}
+                    <div class="border p-4 rounded-md bg-gray-50 shadow-sm">
+                        <p><strong>{{ address.name }}</strong>
+                            {% if address.is_default %}
+                            <span class="text-sm text-green-600">(Default)</span>
+                            {% endif %}
+                        </p>
+                        <p>{{ address.phone }}</p>
+                        <p>{{ address.address_line1 }}</p>
+                        {% if address.address_line2 %}<p>{{ address.address_line2 }}</p>{% endif %}
+                        <p>{{ address.city }}, {{ address.state }} - {{ address.postal_code }}</p>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-gray-500">No addresses saved yet.</p>
+                {% endif %}
+            </div>
+
+            <!-- Baby Profiles -->
+            <div id="babies">
+                <h2 class="text-2xl font-semibold mb-4">👶 Baby Profiles</h2>
+                {% if baby_profiles %}
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% for baby in baby_profiles %}
+                    <div class="border p-4 rounded-md bg-white shadow-sm flex items-start gap-4">
+                        <div
+                            class="w-10 h-10 bg-yellow-100 text-yellow-800 rounded-full flex items-center justify-center font-bold text-xl">
+                            👶
+                        </div>
+                        <div class="flex-1">
+                            <p><strong>Name:</strong> {{ baby.baby_name|default:"N/A" }}</p>
+                            <p><strong>DOB:</strong> {{ baby.baby_dob|date:"M d, Y"|default:"N/A" }}</p>
+                            <p><strong>Gender:</strong> {{ baby.baby_gender|default:"N/A" }}</p>
+                            <p><strong>Weight:</strong> {{ baby.birth_weight|default:'' }} kg</p>
+                            <p><strong>Height:</strong> {{ baby.birth_height|default:'' }} cm</p>
+                            {% if baby.notes %}<p><strong>Notes:</strong> {{ baby.notes }}</p>{% endif %}
+                            <div class="mt-3 flex gap-2">
+                                <a href="{% url 'user:edit_baby_profile' baby.id %}"
+                                    class="text-blue-600 underline">Edit</a>
+                                <a href="{% url 'user:delete_baby_profile' baby.id %}"
+                                    class="text-red-600 underline">Delete</a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-gray-500">No baby profiles added yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
 </section>
 {% endblock %}

@@ -1,0 +1,55 @@
+{% extends 'admin_panel/base.html' %}
+{% block content %}
+
+<div class="max-w-3xl mx-auto bg-white shadow-md rounded-lg p-6 mt-6">
+    <h2 class="text-2xl font-semibold text-gray-800 mb-4">
+        Transaction #{{ tx.id }}
+    </h2>
+
+    <div class="space-y-3 text-gray-700">
+        <div class="flex justify-between">
+            <span class="font-medium">User:</span>
+            <span>{{ tx.wallet.user.username }}</span>
+        </div>
+
+        <div class="flex justify-between">
+            <span class="font-medium">Date:</span>
+            <span>{{ tx.created_at|date:"M d, Y H:i" }}</span>
+        </div>
+
+        <div class="flex justify-between">
+            <span class="font-medium">Type:</span>
+            <span class="px-2 py-1 rounded-full text-sm font-semibold
+                {% if tx.transaction_type == 'Credit' %}
+                    bg-green-100 text-green-700
+                {% else %}
+                    bg-red-100 text-red-700
+                {% endif %}
+            ">
+                {{ tx.transaction_type }}
+            </span>
+        </div>
+
+        <div class="flex justify-between">
+            <span class="font-medium">Amount:</span>
+            <span class="text-lg font-bold text-gray-900">₹{{ tx.amount }}</span>
+        </div>
+
+        <div class="flex justify-between">
+            <span class="font-medium">Reason:</span>
+            <span>{{ tx.reason }}</span>
+        </div>
+
+        {% if tx.related_order %}
+        <div class="flex justify-between items-center">
+            <span class="font-medium">Related Order:</span>
+            <a href="{% url 'admin_panel:admin_order_detail' tx.related_order.id %}"
+                class="text-blue-600 hover:underline font-medium">
+                View Order #{{ tx.related_order.id }}
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% endblock %}

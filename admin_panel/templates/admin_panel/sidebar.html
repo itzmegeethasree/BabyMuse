@@ -5,13 +5,13 @@
     <li><a href="{% url 'admin_panel:admin_orders' %}" class="hover:text-pink-500">Orders</a></li>
     <li><a href="{% url 'admin_panel:admin_products' %}">Products</a></li>
     <li><a href="{% url 'admin_panel:admin_customer_list' %}">Customers</a></li>
-    <li><a href="">Coupons</a></li>
+    <li><a href="{% url 'admin_panel:admin-coupon-list' %}">Coupons</a></li>
     <li><a href="{% url 'admin_panel:category_list' %}">Categories</a></li>
     <li><a href="{% url 'admin_panel:admin_return_requests' %}">Refund/Return</a></li>
     <li><a href="{% url 'admin_panel:product_offer_list' %}">Product Offers</a></li>
-    <li><a href="">Sales Report</a></li>
+    <li><a href="{% url 'admin_panel:wallet_transaction_list' %}">Wallet Transactions</a></li>
+    <li><a href="{% url 'admin_panel:sales_report' %}">Sales Report</a></li>
     <li><a href="{% url 'admin_panel:banner_list' %}">Banners</a></li>
-    </li>
     <li><a href="{% url 'admin_panel:custom_admin_logout' %}" class="text-red-600">Sign Out</a></li>
   </ul>
 </nav>

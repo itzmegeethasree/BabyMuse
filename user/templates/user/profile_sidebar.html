@@ -1,0 +1,72 @@
+<aside class="w-full md:w-1/4 bg-gray-50 p-4 rounded-lg shadow-sm space-y-8">
+
+    <!-- ⚙️ Actions -->
+    <div>
+        <h3 class="text-lg font-semibold mb-4">⚙️ Actions</h3>
+        <ul class="space-y-3 text-sm">
+            <li><a href="{% url 'user:edit_profile' %}" class="block text-blue-600 hover:underline">✏️ Edit Profile</a>
+            </li>
+            <li><a href="{% url 'user:change_password' %}" class="block text-blue-700 hover:underline">🔒 Change
+                    Password</a></li>
+            <li><a href="{% url 'user:user_wallet' %}" class="block text-blue-600 hover:underline">💰 View Wallet</a>
+            </li>
+            <li><a href="{% url 'user:address_book' %}" class="block text-blue-600 hover:underline">🏠 Manage
+                    Addresses</a></li>
+            <li><a href="{% url 'orders:order' %}" class="block text-blue-600 hover:underline">📦 My Orders</a></li>
+            <li><a href="{% url 'user:add_baby_profile' %}" class="block text-blue-600 hover:underline">👶 Add Baby</a>
+            </li>
+        </ul>
+    </div>
+
+    <!-- 🎁 Rewards -->
+    <div>
+        <h3 class="text-lg font-semibold mb-4">🎁 Rewards</h3>
+
+        <!-- Referral Code -->
+        <div class="mb-4">
+            <p class="text-sm text-gray-700 mb-1">Referral Code:</p>
+            <div class="flex items-center gap-2">
+                <span id="referralCode" class="font-mono bg-gray-100 px-2 py-1 rounded text-sm">
+                    {{ user.referral_code }}
+                </span>
+                <button onclick="copyReferralCode()" class="text-blue-600 text-sm hover:underline">Copy</button>
+            </div>
+        </div>
+
+        <!-- Referrals -->
+        <div class="mb-4">
+            <p class="text-sm font-medium text-gray-700 mb-1">👥 Referrals</p>
+            {% if my_referrals %}
+            <ul class="text-sm text-gray-600 space-y-1">
+                {% for r in my_referrals %}
+                <li>{{ r.username }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-sm text-gray-500">None yet</p>
+            {% endif %}
+        </div>
+
+        <!-- Coupons -->
+        <div>
+            <p class="text-sm font-medium text-gray-700 mb-1">🎟 Coupons</p>
+            {% if my_coupons %}
+            <ul class="text-sm text-gray-600 space-y-1">
+                {% for coupon in my_coupons %}
+                <li>{{ coupon.code }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="text-sm text-gray-500">None yet</p>
+            {% endif %}
+        </div>
+    </div>
+</aside>
+<script>
+    function copyReferralCode() {
+        const code = document.getElementById("referralCode").innerText;
+        navigator.clipboard.writeText(code).then(() => {
+            alert("Referral code copied!");
+        });
+    }
+</script>

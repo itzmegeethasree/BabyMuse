@@ -1,0 +1,56 @@
+{% extends 'admin_panel/base.html' %}
+{% block content %}
+
+<div class="max-w-6xl mx-auto mt-8">
+    <h2 class="text-2xl font-semibold text-gray-800 mb-4">Wallet Transactions</h2>
+
+    <div class="overflow-x-auto bg-white shadow-md rounded-lg">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-100 text-gray-700 text-sm uppercase tracking-wider">
+                <tr>
+                    <th class="px-4 py-3 text-left">ID</th>
+                    <th class="px-4 py-3 text-left">Date</th>
+                    <th class="px-4 py-3 text-left">User</th>
+                    <th class="px-4 py-3 text-left">Type</th>
+                    <th class="px-4 py-3 text-left">Amount</th>
+                    <th class="px-4 py-3 text-left">Details</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200 text-sm">
+                {% for tx in transactions %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 font-medium text-gray-800">{{ tx.id }}</td>
+                    <td class="px-4 py-3 text-gray-600">{{ tx.created_at|date:"M d, Y H:i" }}</td>
+                    <td class="px-4 py-3 text-gray-600">{{ tx.wallet.user.username }}</td>
+                    <td class="px-4 py-3">
+                        <span class="px-2 py-1 rounded-full text-xs font-semibold
+                            {% if tx.transaction_type == 'Credit' %}
+                                bg-green-100 text-green-700
+                            {% else %}
+                                bg-red-100 text-red-700
+                            {% endif %}
+                        ">
+                            {{ tx.transaction_type }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 font-semibold text-gray-900">₹{{ tx.amount }}</td>
+                    <td class="px-4 py-3">
+                        <a href="{% url 'admin_panel:admin_wallet_transaction_detail' tx.id %}"
+                            class="text-blue-600 hover:underline font-medium">
+                            View
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="px-4 py-6 text-center text-gray-500">
+                        No transactions found.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% endblock %}
