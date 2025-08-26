@@ -1,6 +1,6 @@
 from django.forms import inlineformset_factory
 from core.models import Banner
-from shop.models import Product, ProductVariant, Category, VariantOption
+from shop.models import Brand, Product, ProductVariant, Category, VariantOption
 from django import forms
 from .widgets import MultiFileInput
 from orders.models import Coupon
@@ -54,7 +54,7 @@ class ProductForm(forms.ModelForm):
         fields = [
             'name', 'category',  'description',
             'min_age', 'max_age', 'gender',
-            'is_featured', 'is_listed', 'status', 'product_offer_percentage'
+            'is_featured', 'is_listed', 'status', 'product_offer_percentage','brand'
         ]
         widgets = {
             'name': forms.TextInput(attrs={
@@ -197,7 +197,8 @@ class CouponForm(forms.ModelForm):
         fields = [
             'code', 'discount', 'is_percentage',
             'minimum_amount', 'max_discount_amount',
-            'valid_from', 'valid_to', 'active'
+            'valid_from', 'valid_to', 'active',
+            'usage_limit'  # ✅ Add this
         ]
         widgets = {
             'code': forms.TextInput(attrs={'class': 'w-full border p-2 rounded'}),
@@ -214,6 +215,7 @@ class CouponForm(forms.ModelForm):
                 'class': 'w-full border p-2 rounded'
             }),
             'active': forms.CheckboxInput(attrs={'class': 'h-4 w-4'}),
+            'usage_limit': forms.NumberInput(attrs={'class': 'w-full border p-2 rounded'})  # ✅ Add widget
         }
 
     def clean(self):
@@ -223,12 +225,10 @@ class CouponForm(forms.ModelForm):
         max_discount_amount = cleaned_data.get("max_discount_amount")
 
         if is_percentage and (discount > 100 or discount <= 0):
-            self.add_error(
-                "discount", "Percentage discount must be between 0 and 100.")
+            self.add_error("discount", "Percentage discount must be between 0 and 100.")
 
         if is_percentage and not max_discount_amount:
-            self.add_error(
-                "max_discount_amount", "Maximum discount amount is required for percentage coupons.")
+            self.add_error("max_discount_amount", "Maximum discount amount is required for percentage coupons.")
 
         valid_from = cleaned_data.get("valid_from")
         valid_to = cleaned_data.get("valid_to")
@@ -250,3 +250,14 @@ class BannerForm(forms.ModelForm):
             raise forms.ValidationError(
                 "Minimum age cannot be greater than maximum age.")
         return cleaned_data
+
+
+
+class BrandForm(forms.ModelForm):
+    class Meta:
+        model = Brand
+        fields = ['name', 'is_active']
+        widgets = {
+            'name': forms.TextInput(attrs={'class': 'form-control'}),
+            'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+        }

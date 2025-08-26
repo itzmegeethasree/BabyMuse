@@ -33,19 +33,6 @@
             </div>
         </div>
 
-        <!-- Referrals -->
-        <div class="mb-4">
-            <p class="text-sm font-medium text-gray-700 mb-1">👥 Referrals</p>
-            {% if my_referrals %}
-            <ul class="text-sm text-gray-600 space-y-1">
-                {% for r in my_referrals %}
-                <li>{{ r.username }}</li>
-                {% endfor %}
-            </ul>
-            {% else %}
-            <p class="text-sm text-gray-500">None yet</p>
-            {% endif %}
-        </div>
 
         <!-- Coupons -->
         <div>

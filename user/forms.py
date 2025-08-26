@@ -35,9 +35,7 @@ class CustomUserCreationForm(UserCreationForm):
         user.last_name = self.cleaned_data["lastname"]
         user.phone = self.cleaned_data["phone"]
         user.email = self.cleaned_data["email"]
-        user.referral_code = self.cleaned_data.get("referral_code") or " "
 
-        # Optionally handle referred_by logic here (based on referral_code)
 
         if commit:
             user.save()

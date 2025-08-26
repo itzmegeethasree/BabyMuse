@@ -6,14 +6,14 @@ from django.shortcuts import get_object_or_404, redirect
 import csv
 from django.http import HttpResponse
 from orders.models import ORDER_STATUS, Coupon, Order, OrderItem, ReturnRequest
-from .forms import BannerForm, CouponForm, ProductForm, ProductOfferForm, VariantComboForm, CategoryOfferForm
+from .forms import BannerForm, BrandForm, CouponForm, ProductForm, ProductOfferForm, VariantComboForm, CategoryOfferForm
 from django.utils.text import slugify
 import json
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import get_user_model
 
 from .forms import CategoryForm, ProductForm, VariantComboForm
-from shop.models import Category, Product, ProductImage, ProductVariant, VariantOption, VariantAttribute
+from shop.models import Brand, Category, Product, ProductImage, ProductVariant, VariantOption, VariantAttribute
 from .models import AdminUser
 from django.contrib.auth.hashers import check_password, make_password
 from django.shortcuts import render, redirect, get_object_or_404
@@ -34,7 +34,8 @@ from django.http import HttpResponse, FileResponse
 from io import BytesIO
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-
+from django.utils.timezone import now
+from django.db.models.functions import ExtractMonth
 
 User = get_user_model()
 
@@ -96,21 +97,101 @@ def admin_forgot_password(request):
     return render(request, 'admin_panel/forgot_password.html')
 
 
+
+User = get_user_model()
+
 @admin_login_required
 def admin_dashboard(request):
     total_users = User.objects.count()
     total_products = Product.objects.count()
     total_orders = Order.objects.count()
-    total_revenue = Order.objects.filter(status="paid").aggregate(
+    total_revenue = Order.objects.filter(status="Delivered").aggregate(
         total=Sum('total_price'))['total'] or 0
-    latest_orders = Order.objects.order_by('-created_at')[:5]
+
+    latest_orders = Order.objects.select_related('user').order_by('-created_at')[:5]
+
+
+# Top 5 best-selling products
+    top_products = (
+        OrderItem.objects.filter(order__status='Delivered')
+    .values('product__name')
+    .annotate(total_sold=Sum('quantity'))
+    .order_by('-total_sold')[:5]
+)
+
+# Top 5 categories
+    top_categories = (
+    OrderItem.objects.filter(order__status='Delivered')
+    .values('product__category__name')
+    .annotate(total_sold=Sum('quantity'))
+    .order_by('-total_sold')[:5]
+)
+
+# Top 5 brands
+    top_brands = (
+    OrderItem.objects.filter(order__status='Delivered')
+    .values('product__brand__name')
+    .annotate(total_sold=Sum('quantity'))
+    .order_by('-total_sold')[:5]
+)
+
+    monthly_sales = (
+    Order.objects.filter(status='Delivered', created_at__year=now().year)
+    .annotate(month=ExtractMonth('created_at'))
+    .values('month')
+    .annotate(total=Sum('total_price'))
+    .order_by('month')
+)
+
+# Convert to chart-friendly format
+    sales_chart_data = {
+    'labels': [f"{month['month']:02d}" for month in monthly_sales],
+    'totals': [float(month['total']) for month in monthly_sales],
+}
+
+
+    sales_2024 = get_monthly_sales(2024)
+    sales_2025 = get_monthly_sales(2025)
+
+
+
+    ledger = WalletTransaction.objects.all().order_by('-created_at')
+
+    total_credit = ledger.filter(transaction_type='Credit').aggregate(Sum('amount'))['amount__sum'] or 0
+    total_debit = ledger.filter(transaction_type='Debit').aggregate(Sum('amount'))['amount__sum'] or 0
+    net_balance = total_credit - total_debit
+    
     return render(request, 'admin_panel/dashboard.html', {
-        'total_users': total_users,
-        'total_products': total_products,
-        'total_orders': total_orders,
-        'total_revenue': total_revenue,
-        'latest_orders': latest_orders,
-    })
+    'total_users': total_users,
+    'total_products': total_products,
+    'total_orders': total_orders,
+    'total_revenue': total_revenue,
+    'latest_orders': latest_orders,
+    'top_products': top_products,
+    'top_categories': top_categories,
+    'top_brands': top_brands,
+    'sales_chart_data': sales_chart_data,
+    'ledger': ledger[:5],  
+    'total_credit': total_credit,
+    'total_debit': total_debit,
+    'net_balance': net_balance,
+    'sales_2024': format_pie_data(sales_2024),
+    'sales_2025': format_pie_data(sales_2025),
+
+})
+def format_pie_data(sales):
+    labels = [f"{month['month']:02d}" for month in sales]
+    totals = [float(month['total']) for month in sales]
+    return {'labels': labels, 'totals': totals}
+
+def get_monthly_sales(year):
+    return (
+        Order.objects.filter(status='Delivered', created_at__year=year)
+        .annotate(month=ExtractMonth('created_at'))
+        .values('month')
+        .annotate(total=Sum('total_price'))
+        .order_by('month')
+    )
 
 
 @admin_login_required
@@ -662,20 +743,38 @@ def admin_toggle_product_visibility(request, product_id):
 # coupon management
 
 
+from django.db.models import Q, F
+from django.core.paginator import Paginator
+from django.shortcuts import render
+from orders.models import Coupon
+
 def coupon_list(request):
-    query = request.GET.get('q')
+    query = request.GET.get('q', '').strip()
+    available_only = request.GET.get('available_only') == '1'
+
     coupons = Coupon.objects.filter(is_deleted=False)
 
+    #  Search by code
     if query:
         coupons = coupons.filter(Q(code__icontains=query))
 
+    # Filter by usage availability
+    if available_only:
+        coupons = coupons.filter(
+            Q(usage_limit__isnull=True) | Q(times_used__lt=F('usage_limit'))
+        )
+
+    # 📦 Pagination
     coupons = coupons.order_by('-created_at')
     paginator = Paginator(coupons, 10)
     page = request.GET.get('page')
-    coupons = paginator.get_page(page)
+    paginated_coupons = paginator.get_page(page)
 
-    return render(request, 'admin_panel/coupon_list.html', {'coupons': coupons})
-
+    return render(request, 'admin_panel/coupon_list.html', {
+        'coupons': paginated_coupons,
+        'query': query,
+        'available_only': available_only
+    })
 
 def coupon_create(request):
     if request.method == 'POST':
@@ -777,6 +876,7 @@ def sales_report_view(request):
     return render(request, 'admin_panel/sales_report.html', context)
 
 
+
 @admin_login_required
 def download_sales_report_pdf(request):
     from_date = request.GET.get('from')
@@ -788,36 +888,73 @@ def download_sales_report_pdf(request):
         to_date = parse_date(to_date)
         orders = orders.filter(created_at__date__range=(from_date, to_date))
 
-    # PDF setup
     buffer = BytesIO()
     p = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
-    y = height - 50
+    y = height - 40
 
+    # 🧾 Header
     p.setFont("Helvetica-Bold", 16)
     p.drawString(50, y, "📄 BabyMuse Sales Report")
+    y -= 25
+
+    p.setFont("Helvetica", 11)
+    date_range = f"From: {from_date}   To: {to_date}" if from_date and to_date else "All Delivered Orders"
+    p.drawString(50, y, date_range)
     y -= 30
 
-    p.setFont("Helvetica", 12)
-    p.drawString(50, y, f"From: {from_date}   To: {to_date}")
-    y -= 30
-
-    p.drawString(
-        50, y, "Order ID | Customer | Date | Total ₹ | Discount ₹ | Payment")
-    y -= 20
+    # 📊 Table Headers
+    headers = ["Order ID", "Customer", "Date", "Total ₹", "Discount ₹", "Payment"]
+    x_positions = [50, 110, 200, 290, 380, 470]
+    p.setFont("Helvetica-Bold", 10)
+    for i, header in enumerate(headers):
+        p.drawString(x_positions[i], y, header)
+    y -= 15
     p.line(50, y, width - 50, y)
     y -= 20
 
+    # 🧾 Table Rows
+    p.setFont("Helvetica", 10)
+    total_amount = 0
+    total_discount = 0
+
     for order in orders:
-        if y < 100:
+        if y < 80:
             p.showPage()
             y = height - 50
+            p.setFont("Helvetica-Bold", 10)
+            for i, header in enumerate(headers):
+                p.drawString(x_positions[i], y, header)
+            y -= 15
+            p.line(50, y, width - 50, y)
+            y -= 20
+            p.setFont("Helvetica", 10)
 
-        p.drawString(
-            50, y, f"{order.id} | {order.user.username} | {order.created_at.date()} | ₹{order.total_price} | ₹{order.discount_amount} | {order.payment_method}")
+        values = [
+            str(order.id),
+            order.user.username,
+            str(order.created_at.date()),
+            f"₹{order.total_price:.2f}",
+            f"₹{order.discount_amount:.2f}",
+            order.payment_method
+        ]
+        for i, value in enumerate(values):
+            p.drawString(x_positions[i], y, value)
         y -= 20
 
-    p.showPage()
+        total_amount += order.total_price
+        total_discount += order.discount_amount
+
+    # 📈 Summary
+    y -= 30
+    p.setFont("Helvetica-Bold", 11)
+    p.drawString(50, y, f"Total Sales: ₹{total_amount:.2f}")
+    p.drawString(250, y, f"Total Discounts: ₹{total_discount:.2f}")
+
+    # 🖋️ Footer
+    p.setFont("Helvetica-Oblique", 9)
+    p.drawString(50, 30, f"Generated by BabyMuse Admin • {now().strftime('%Y-%m-%d %H:%M')}")
+
     p.save()
     buffer.seek(0)
 
@@ -905,3 +1042,33 @@ def wallet_transaction_list(request):
 def wallet_transaction_detail(request, tx_id):
     tx = get_object_or_404(WalletTransaction, id=tx_id)
     return render(request, 'admin_panel/wallet_transaction_detail.html', {'tx': tx})
+
+
+#Brand
+
+def brand_list(request):
+    brands = Brand.objects.all()
+    return render(request, 'admin_panel/brand_list.html', {'brands': brands})
+
+
+def create_brand(request):
+    form = BrandForm(request.POST or None)
+    if form.is_valid():
+        form.save()
+        return redirect('admin_panel:brand_list')  
+    return render(request, 'admin_panel/brand_form.html', {'form': form})
+
+def update_brand(request, brand_id):
+    brand = Brand.objects.get(id=brand_id)
+    form = BrandForm(request.POST or None, instance=brand)
+    if form.is_valid():
+        form.save()
+        return redirect('admin_panel:brand_list')
+    return render(request, 'admin_panel/brand_form.html', {'form': form})
+
+def delete_brand(request, brand_id):
+    brand = Brand.objects.get(id=brand_id)
+    if request.method == 'POST':
+        brand.delete()
+        return redirect('admin_panel:brand_list')
+    return render(request, 'admin_panel/brand_confirm_delete.html', {'brand': brand})

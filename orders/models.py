@@ -33,7 +33,11 @@ class Coupon(models.Model):
         max_digits=10, decimal_places=2, default=0)
     max_discount_amount = models.DecimalField(
         max_digits=10, decimal_places=2, null=True, blank=True)
+    # Maximum number of times this coupon can be used
+    usage_limit = models.PositiveIntegerField(null=True, blank=True, help_text="Max times this coupon can be used")
 
+    # Track how many times it's been used
+    times_used = models.PositiveIntegerField(default=0)
     user = models.ForeignKey(
         User, on_delete=models.CASCADE, null=True, blank=True,
         help_text="Optional: Assign to specific user"

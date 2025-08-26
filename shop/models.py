@@ -198,6 +198,7 @@ class Brand(models.Model):
     name = models.CharField(max_length=100, unique=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
+    logo = models.ImageField(upload_to='brand_logos/', blank=True, null=True)
 
     def __str__(self):
         return self.name

@@ -1,3 +1,4 @@
+import traceback
 from .models import Order, OrderItem
 from django.shortcuts import get_object_or_404, redirect, render
 from datetime import timezone
@@ -138,6 +139,9 @@ def checkout_view(request):
         if payment_method == 'COD':
             order.is_paid = True
             order.save()
+            if order.coupon:
+                order.coupon.times_used += 1
+                order.coupon.save()
 
             for item in cart_items:
                 item.product_variant.stock -= item.quantity
@@ -148,6 +152,7 @@ def checkout_view(request):
             request.session.pop('discount', None)
 
             return redirect('orders:order_success', order_id=order.id)
+        
         elif payment_method == 'WALLET':
             wallet=Wallet.objects.get(user=user)
             if wallet.balance >= total:
@@ -156,6 +161,10 @@ def checkout_view(request):
                 order.is_paid = True
                 order.payment_method = 'Wallet'
                 order.save()
+
+                if order.coupon:
+                    order.coupon.times_used += 1
+                    order.coupon.save()
                 #wallet transaction
                 WalletTransaction.objects.create(
                     wallet=wallet,
@@ -212,52 +221,59 @@ def checkout_view(request):
     })
 
 
+
+
 @require_POST
 @login_required
 def ajax_apply_coupon(request):
-    
-    code = request.POST.get('coupon_code', '').strip()
-    user = request.user
+    try:
+        code = request.POST.get('coupon_code', '').strip()
+        user = request.user
 
-    # Step 1: Find a valid coupon
-    coupon = Coupon.objects.filter(code=code, active=True, user=user).first()
+        cart_items = CartItem.objects.filter(user=user).select_related('product_variant', 'product_variant__product')
 
-    # Step 2: Prepare order amounts
-    cart_items = CartItem.objects.filter(user=user).select_related('product')
-    subtotal = sum(item.product.price * item.quantity for item in cart_items)
-    shipping = 50.00 if subtotal < 1000 else 0.00
-    tax = subtotal * 0.05
+        subtotal = sum(
+            Decimal(item.product_variant.get_offer_price()) * item.quantity
+            for item in cart_items
+            if item.product_variant and hasattr(item.product_variant, 'get_offer_price')
+        )
 
-    discount = 0.0
-    coupon_code = ""
-    coupon_msg = ""
-    success = False
+        shipping = Decimal('50.00') if subtotal < Decimal('1000.00') else Decimal('0.00')
+        tax = subtotal * Decimal('0.05')
+        discount = Decimal('0.00')
+        coupon_code = ""
+        coupon_msg = ""
+        success = False
 
-    # Step 3: Validate coupon business logic
-    result, error = validate_coupon(code, subtotal)
-    if error:
-        coupon_msg = error
-    else:
-        coupon_obj = result['coupon']
-        discount = float(result['discount'])
-        coupon_code = coupon_obj.code
-        coupon_msg = f"Coupon '{coupon_obj.code}' applied successfully!"
-        request.session['applied_coupon'] = coupon_code
-        request.session['discount'] = discount
-        success = True
+        result, error = validate_coupon(code, subtotal)
+        if error:
+            coupon_msg = error
+        elif result:
+            coupon_obj = result['coupon']
+            if coupon_obj.usage_limit is not None and coupon_obj.times_used >= coupon_obj.usage_limit:
+                coupon_msg = "This coupon has reached its usage limit."
+            else:
+                discount = Decimal(str(result['discount']))
+                coupon_code = coupon_obj.code
+                coupon_msg = f"Coupon '{coupon_obj.code}' applied successfully!"
+                request.session['applied_coupon'] = coupon_code
+                request.session['discount'] = float(discount)  # Store as float for session safety
+                success = True
 
-    # Step 4: Final total calculation
-    total = subtotal + shipping + tax - discount
+        total = subtotal + shipping + tax - discount
 
-    # Step 5: Return response
-    return JsonResponse({
-        "success": success,
-        "msg": coupon_msg,
-        "discount": "%.2f" % discount,
-        "total": "%.2f" % total,
-        "coupon_code": coupon_code,
-    })
+        return JsonResponse({
+            "success": success,
+            "msg": coupon_msg,
+            "discount": "%.2f" % float(discount),
+            "total": "%.2f" % float(total),
+            "coupon_code": coupon_code,
+        })
 
+    except Exception as e:
+        print("Coupon AJAX error:", str(e))
+        traceback.print_exc()
+        return JsonResponse({"success": False, "msg": "Server error occurred."})
 
 @csrf_exempt
 @login_required
@@ -280,6 +296,10 @@ def razorpay_success(request):
         order.is_paid = True
         order.status = "Confirmed"
         order.save()
+        
+        if order.coupon:
+            order.coupon.times_used += 1
+            order.coupon.save()
 
         for item in order.items.select_related('product'):
             if item.product:
@@ -547,7 +567,8 @@ def return_order_item(request, item_id):
 def download_invoice(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
     template_path = 'order/invoice.html'
-    context = {'order': order}
+    context = {'order': order,
+               'items':order.items.all()}
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="Invoice_Order_{order.id}.pdf"'

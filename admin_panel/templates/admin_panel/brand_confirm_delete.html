@@ -1,0 +1,22 @@
+{% extends 'admin_panel/base.html' %}
+{% block content %}
+
+<div class="max-w-xl mx-auto bg-white shadow-md rounded-lg p-6">
+  <h2 class="text-xl font-bold text-red-600 mb-4">🗑️ Delete Brand</h2>
+
+  <p class="text-gray-700 mb-6">
+    Are you sure you want to delete <strong class="text-red-700">{{ brand.name }}</strong>? This action cannot be undone.
+  </p>
+
+  <form method="post" class="flex items-center justify-between">
+    {% csrf_token %}
+    <a href="{% url 'admin_panel:brand_list' %}" class="text-sm text-gray-600 hover:underline">
+      ← Cancel
+    </a>
+    <button type="submit" class="inline-flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm font-medium">
+      🗑 Confirm Delete
+    </button>
+  </form>
+</div>
+
+{% endblock %}

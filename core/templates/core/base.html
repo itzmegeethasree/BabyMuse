@@ -109,30 +109,30 @@
   </header>
 
   <!-- Page Content -->
-  <main class="max-w-6xl mx-auto py-10 px-6">
+<main class="max-w-6xl mx-auto py-10 px-6">
+  <!-- Always render the container -->
+  <div id="toast-container" class="fixed top-5 right-5 z-50 space-y-4">
     {% if messages %}
-    <div id="toast-container" class="fixed top-5 right-5 z-50 space-y-4">
       {% for message in messages %}
-      <div class="flex items-center gap-3 max-w-sm px-4 py-3 rounded-lg shadow-lg text-sm animate-slide-in
-        {% if message.tags == 'success' %}
-          bg-green-100 text-green-800 border border-green-400
-        {% elif message.tags == 'error' %}
-          bg-red-100 text-red-800 border border-red-400
-        {% elif message.tags == 'warning' %}
-          bg-yellow-100 text-yellow-800 border border-yellow-400
-        {% else %}
-          bg-blue-100 text-blue-800 border border-blue-400
-        {% endif %}
-      ">
-        <span>{{ message }}</span>
-      </div>
+        <div class="flex items-center gap-3 max-w-sm px-4 py-3 rounded-lg shadow-lg text-sm animate-slide-in
+          {% if message.tags == 'success' %}
+            bg-green-100 text-green-800 border border-green-400
+          {% elif message.tags == 'error' %}
+            bg-red-100 text-red-800 border border-red-400
+          {% elif message.tags == 'warning' %}
+            bg-yellow-100 text-yellow-800 border border-yellow-400
+          {% else %}
+            bg-blue-100 text-blue-800 border border-blue-400
+          {% endif %}
+        ">
+          <span>{{ message }}</span>
+        </div>
       {% endfor %}
-    </div>
     {% endif %}
+  </div>
 
-    {% block content %}{% endblock %}
-  </main>
-
+  {% block content %}{% endblock %}
+</main>
   <!-- Footer -->
   <footer class="bg-gradient-to-b from-blue-100 to-pink-100 pt-10">
     <!-- Newsletter -->

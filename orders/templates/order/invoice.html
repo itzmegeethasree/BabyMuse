@@ -28,14 +28,12 @@
             <th>Product</th>
             <th>Qty</th>
             <th>Price</th>
-            <th>Total</th>
         </tr>
-        {% for item in order.orderitem_set.all %}
+        {% for item in items %}
         <tr>
             <td>{{ item.product.name }}</td>
             <td>{{ item.quantity }}</td>
             <td>{{ item.price }}</td>
-            <td>{{ item.price|floatformat:2|add:item.quantity }}</td>
         </tr>
         {% endfor %}
     </table>

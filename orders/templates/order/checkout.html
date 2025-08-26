@@ -5,7 +5,8 @@
 
 <section class="max-w-6xl mx-auto py-10 px-4 space-y-10">
 
-  <!-- 💸 Coupon Form (AJAX-based, outside main form) -->
+
+  <!--  Coupon Form (AJAX-based, outside main form) -->
   <form method="POST" id="coupon-form" class="flex gap-2 items-center mb-6" novalidate>
     {% csrf_token %}
     <input type="text" name="coupon_code" id="coupon_code" placeholder="Enter coupon code"
@@ -14,6 +15,7 @@
       Apply Coupon
     </button>
   </form>
+<div id="toast-container" class="fixed top-4 right-4 z-50 space-y-2"></div>
 
   <!-- 🧾 Checkout Form -->
   <form method="POST" action="{% url 'orders:checkout' %}" id="checkout-form">
@@ -100,23 +102,23 @@
       {% endif %}
     </div>
 
-    <!-- 💰 Order Summary -->
-    <div class="space-y-6">
-      <h2 class="text-2xl font-semibold text-gray-800">💰 Order Summary</h2>
-      <div class="bg-white border rounded-lg p-4 space-y-2 text-gray-700 shadow-sm">
-        <p>Subtotal: ₹{{ subtotal }}</p>
-        <p>Tax (5%): ₹{{ tax }}</p>
-        <p>Shipping: ₹{{ shipping }}</p>
-        {% if applied_coupon %}
-        <p class="text-green-700 font-medium" id="discount-row">
-          Coupon Discount ({{ applied_coupon.code }}): -₹{{ discount|floatformat:2 }}
-        </p>
-        {% endif %}
-        <hr>
-        <p class="font-bold text-lg text-gray-900" id="total-row">Total: ₹{{ total }}</p>
-      </div>
-    </div>
+<!-- 💰 Order Summary -->
+<div class="space-y-6">
+  <h2 class="text-2xl font-semibold text-gray-800">💰 Order Summary</h2>
+  <div class="bg-white border rounded-lg p-4 space-y-2 text-gray-700 shadow-sm order-summary-box">
+    <p>Subtotal: ₹<span id="subtotal-value">{{ subtotal }}</span></p>
+    <p>Tax (5%): ₹<span id="tax-value">{{ tax }}</span></p>
+    <p>Shipping: ₹<span id="shipping-value">{{ shipping }}</span></p>
 
+    <!-- Coupon Discount Row (initially hidden) -->
+    <p id="discount-row" class="text-green-700 font-medium hidden"></p>
+
+    <hr>
+    <p class="font-bold text-lg text-gray-900" id="total-row">Total: ₹<span id="total-value">{{ total }}</span></p>
+  </div>
+</div>
+    
+    
     <!-- 💳 Payment Method -->
     <div class="space-y-6">
       <h2 class="text-2xl font-semibold text-gray-800">💳 Payment Method</h2>
@@ -157,6 +159,7 @@
 
 <!-- 🧠 JavaScript -->
 <script>
+document.addEventListener("DOMContentLoaded", function () {
   // Payment method toggle
   const codBtn = document.getElementById('cod-submit');
   const rzpBtn = document.getElementById('rzp-button');
@@ -184,7 +187,7 @@
   rzpBtn.addEventListener('click', function () {
     const addressSelected = document.querySelector('input[name="address"]:checked');
     if (!addressSelected) {
-      alert("Please select a delivery address.");
+      showToast("Please select a delivery address.");
       return;
     }
     document.querySelector('input[value="RAZORPAY"]').checked = true;
@@ -195,7 +198,7 @@
   walBtn.addEventListener('click', function () {
     const addressSelected = document.querySelector('input[name="address"]:checked');
     if (!addressSelected) {
-      alert("Please select a delivery address.");
+      showToast("Please select a delivery address.");
       return;
     }
     document.querySelector('input[value="WALLET"]').checked = true;
@@ -210,7 +213,7 @@
     const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
 
     if (!code) {
-      alert("Please enter a coupon code.");
+      showToast("Please enter a coupon code.");
       return;
     }
 
@@ -231,17 +234,49 @@
       applyBtn.textContent = "Apply Coupon";
 
       if (data.success) {
-        alert(data.msg);
-        location.reload(); // Or update DOM dynamically
+        showToast(data.msg);
+
+        const discountRow = document.getElementById('discount-row');
+        discountRow.textContent = `Coupon Discount (${data.coupon_code}): -₹${data.discount}`;
+        discountRow.classList.remove('hidden');
+
+        document.getElementById('total-value').textContent = data.total;
+
+        const totalRow = document.getElementById('total-row');
+        totalRow.classList.add('animate-pulse');
+        setTimeout(() => totalRow.classList.remove('animate-pulse'), 500);
       } else {
-        alert(data.msg || "Invalid coupon.");
+        showToast(data.msg || "Invalid coupon.");
       }
     })
     .catch(() => {
       applyBtn.disabled = false;
       applyBtn.textContent = "Apply Coupon";
-      alert("Something went wrong. Please try again.");
+      showToast("Something went wrong. Please try again.");
     });
   });
+
+  // Toast function
+  function showToast(message, type = "success") {
+    const container = document.getElementById("toast-container");
+    if (!container) {
+      console.warn("Toast container not found.");
+      return;
+    }
+
+    const toast = document.createElement("div");
+    toast.textContent = message;
+    toast.className = `px-4 py-2 rounded shadow text-white animate-fade-in ${
+      type === "success" ? "bg-green-600" : "bg-red-600"
+    }`;
+
+    container.appendChild(toast);
+
+    setTimeout(() => {
+      toast.classList.add("animate-fade-out");
+      setTimeout(() => toast.remove(), 500);
+    }, 3000);
+  }
+});
 </script>
 {% endblock %}

@@ -185,11 +185,15 @@ def signup(request):
             if user.referred_by:
                 Coupon.objects.create(
                     code=f"REF-{user.referred_by.id}-{uuid.uuid4().hex[:5].upper()}",
-                    discount_amount=100,
+                    discount=100,  
+                    is_percentage=False,  
                     valid_from=timezone.now(),
                     valid_to=timezone.now() + timedelta(days=5),
                     active=True,
-                    user=user.referred_by
+                    user=user.referred_by,
+                    minimum_amount=0,  
+                    usage_limit=1,     
+                    max_discount_amount=None  
                 )
 
             user.backend = 'django.contrib.auth.backends.ModelBackend'
@@ -207,19 +211,21 @@ def signup(request):
 @login_required
 def profile_view(request):
     user = request.user
-    my_referrals = user.referrals.all()
+
+    # Ensure referral code is generated
+    if not user.referral_code:
+        user.save()  # triggers referral code generation via model's save()
     my_coupons = Coupon.objects.filter(user=user, is_deleted=False)
     addresses = Address.objects.filter(user=user)
-    baby_profiles = request.user.babies.all()
-
+    baby_profiles = user.babies.all()
     return render(request, 'user/profile.html', {
         'user': user,
-        'my_referrals': my_referrals,
         'my_coupons': my_coupons,
         'addresses': addresses,
         'baby_profiles': baby_profiles,
-
     })
+
+
 
 
 @login_required

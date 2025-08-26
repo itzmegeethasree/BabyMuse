@@ -16,7 +16,7 @@ class CustomUser(AbstractUser):
         upload_to='profile_images/', blank=True, null=True)
 
     referral_code = models.CharField(
-        max_length=100, blank=True, null=True)
+        max_length=100, blank=True, null=True )
     referred_by = models.ForeignKey(
         'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='referrals')
 

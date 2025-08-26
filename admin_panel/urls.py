@@ -93,7 +93,16 @@ urlpatterns = [
     path('transactions/', views.wallet_transaction_list,
          name='wallet_transaction_list'),
     path('transaction/<int:tx_id>/',
-         views.wallet_transaction_detail, name='admin_wallet_transaction_detail')
+         views.wallet_transaction_detail, name='admin_wallet_transaction_detail'),
+
+         #Brand
+
+
+     path('brands/',views.brand_list,name='brand_list'),
+    path('brands/add/', views.create_brand, name='create_brand'),
+    path('brands/<int:brand_id>/edit/', views.update_brand, name='update_brand'),
+    path('brands/<int:brand_id>/delete/', views.delete_brand, name='delete_brand'),
+
 
 
 ]
