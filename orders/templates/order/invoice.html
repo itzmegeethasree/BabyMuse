@@ -1,43 +1,86 @@
 <html>
-
 <head>
-    <style>
-        body {
-            font-family: Arial;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        td,
-        th {
-            border: 1px solid #000;
-            padding: 8px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      color: #333;
+    }
+    h2, h3 {
+      margin-bottom: 10px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #000;
+      padding: 8px;
+      text-align: left;
+    }
+    .summary p {
+      margin: 4px 0;
+    }
+  </style>
 </head>
-
 <body>
-    <h2>Invoice - Order #{{ order.id }}</h2>
-    <p><strong>User:</strong> {{ order.user.username }}</p>
-    <p><strong>Date:</strong> {{ order.created_at }}</p>
-    <table>
-        <tr>
-            <th>Product</th>
-            <th>Qty</th>
-            <th>Price</th>
-        </tr>
-        {% for item in items %}
-        <tr>
-            <td>{{ item.product.name }}</td>
-            <td>{{ item.quantity }}</td>
-            <td>{{ item.price }}</td>
-        </tr>
-        {% endfor %}
-    </table>
-    <p><strong>Total Paid:</strong> ₹{{ order.total_price }}</p>
-</body>
 
+  <h2>🧾 Invoice - Order #{{ order.id }}</h2>
+
+  <h3>👤 Buyer Information</h3>
+  <p><strong>Name:</strong> {{ user.get_full_name }}</p>
+  <p><strong>Email:</strong> {{ user.email }}</p>
+  <p><strong>Shipping Address:</strong>
+    {{ address.name }}, {{ address.address_line1 }},
+    {{ address.city }}, {{ address.state }} - {{ address.postal_code }}
+  </p>
+
+  <h3>📦 Order Details</h3>
+  <p><strong>Date:</strong> {{ order.created_at|date:"M d, Y H:i" }}</p>
+  <p><strong>Status:</strong> {{ order.status }}</p>
+  <p><strong>Payment Method:</strong> {{ order.payment_method }}</p>
+  {% if coupon %}
+    <p><strong>Coupon Applied:</strong> {{ coupon.code }} (RS:{{ discount_amount|floatformat:2 }})</p>
+  {% endif %}
+
+  <h3>🛒 Items</h3>
+  <table>
+    <thead>
+      <tr>
+        <th>Product</th>
+        <th>Variant</th>
+        <th>Qty</th>
+        <th>Price</th>
+        <th>Subtotal</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in items %}
+      <tr>
+        <td>{{ item.product.name }}</td>
+        <td>
+          {% for opt in item.product_variant.options.all %}
+            {{ opt.value }}{% if not forloop.last %}, {% endif %}
+          {% endfor %}
+        </td>
+        <td>{{ item.quantity }}</td>
+        <td>{{ item.price|floatformat:2 }}</td>
+        <td>{{ item.subtotal }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h3>💰 Summary</h3>
+  <div class="summary">
+    <p><strong>Subtotal:</strong>Rs:{{ subtotal|floatformat:2 }}</p>
+    <p><strong>Shipping Fee:</strong> Rs:{{ shipping_fee|floatformat:2 }}</p>
+    <p><strong>Tax (5%):</strong>Rs:{{ tax|floatformat:2 }}</p>
+    <p><strong>Discount:</strong> Rs:{{ discount_amount|floatformat:2 }}</p>
+    <p><strong>Total Paid:</strong> <strong>Rs:{{ total_price|floatformat:2 }}</strong></p>
+  </div>
+
+</body>
 </html>

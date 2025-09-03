@@ -27,5 +27,5 @@ urlpatterns = [
     path('cart/update/<int:variant_id>/', views.ajax_update_cart_quantity,
          name='ajax_update_cart_quantity'),
     path('cart/data/', views.ajax_cart_data, name='ajax_cart_data'),
-
+     path('review/item/<int:item_id>/add/', views.add_review_from_order_item, name='add_review_from_order_item'),
 ]

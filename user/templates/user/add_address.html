@@ -13,7 +13,7 @@
 
             <form method="POST" class="bg-white p-6 rounded shadow space-y-4">
                 {% csrf_token %}
-
+                <input type="hidden" name="next" value="{{ next }}">
                 <label class="block">
                     Name
                     <input type="text" name="name" value="{{ form.name.value|default:'' }}" required

@@ -81,15 +81,23 @@ class ProductForm(forms.ModelForm):
 
     def clean_min_age(self):
         min_age = self.cleaned_data.get('min_age')
-        if min_age < 0 or min_age > 34:
-            raise forms.ValidationError("age must be between 0 and 34 months")
+        if min_age < 0 or min_age > 36:
+            raise forms.ValidationError("age must be between 0 and 36 months")
         return min_age
 
     def clean_max_age(self):
-        max_age = self.cleaned_data.get('min_age')
-        if max_age < 0 or max_age > 34:
-            raise forms.ValidationError("age must be between 0 and 34 months.")
+        max_age = self.cleaned_data.get('max_age')
+        if max_age < 0 or max_age > 36:
+            raise forms.ValidationError("age must be between 0 and 36 months.")
         return max_age
+    
+    def clean(self):
+        cleaned_data = super().clean()
+        min_age = cleaned_data.get('min_age')
+        max_age = cleaned_data.get('max_age')
+
+        if min_age is not None and max_age is not None and min_age > max_age:
+            raise forms.ValidationError("Minimum age cannot be greater than maximum age.")
 
 
 class MultiFileUploadForm(forms.Form):

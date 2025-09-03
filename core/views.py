@@ -22,10 +22,9 @@ def home_view(request):
                 age = baby.age_in_months()
                 gender = baby.baby_gender
                 age_gender_filters.append(
-                    Q(min_age__lte=age, max_age__gte=age,
-                      gender__in=[gender, 'Unisex'])
-                )
-
+    Q(min_age__isnull=True, max_age__isnull=True, gender='Unisex') |
+    Q(min_age__lte=age, max_age__gte=age, gender__in=[gender, 'Unisex'])
+)
             # Combine filters with OR
             products_query = Q()
             for f in age_gender_filters:
@@ -34,15 +33,16 @@ def home_view(request):
             products = Product.objects.filter(
                 status='Active').filter(products_query).distinct()
 
-            # Filter banners based on baby profile
-            personalized_banners = []
-            for baby in babies:
-                personalized_banners += [
-                    b for b in banners if b.is_suitable_for(baby)
-                ]
-            banners = list(set(personalized_banners))
-            customized = True
+# Filter banners based on baby profile
+            personalized_banners = set()
 
+            for baby in babies:
+                for banner in banners:
+                    if banner.is_suitable_for(baby):
+                        personalized_banners.add(banner)
+
+            banners = list(personalized_banners)
+            customized = True
         else:
             # No baby profile: show generic products and minimal banners
             products = Product.objects.filter(status='Active')[:6]
@@ -52,7 +52,6 @@ def home_view(request):
         # Anonymous user: show generic products and minimal banners
         products = Product.objects.filter(status='Active')[:6]
         banners = banners[:1]
-
     # Enrich products with default variant and price
     for product in products:
         variant = product.get_default_variant()
@@ -62,7 +61,6 @@ def home_view(request):
             'variant': variant,
             'price': price,
         })
-
     return render(request, 'core/home.html', {
         'products': product_data,
         'banners': banners,

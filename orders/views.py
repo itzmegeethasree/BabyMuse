@@ -5,7 +5,7 @@ from datetime import timezone
 import json
 from django.shortcuts import render, redirect, get_object_or_404
 
-from shop.models import CartItem
+from shop.models import CartItem, Product, Review
 from user.models import Address, Wallet, WalletTransaction
 from orders.models import Order, OrderItem, ReturnRequest
 from django.contrib import messages
@@ -184,6 +184,7 @@ def checkout_view(request):
 
                 return redirect('orders:order_success', order_id=order.id)
             else:
+                order.delete()
                 messages.error(request, "Insufficient wallet balance.")
                 return redirect('orders:checkout')
 
@@ -416,15 +417,25 @@ def order_list_view(request):
     return render(request, 'order/order.html', {'orders': page_obj})
 
 
+
 @login_required
 def order_detail_view(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
     items = OrderItem.objects.filter(order=order)
 
+    # Mark which items are reviewable and whether already reviewed
+    for item in items:
+        item.can_review = item.status in ['Delivered', 'Completed']
+        item.already_reviewed = Review.objects.filter(
+            product=item.product,
+            user=request.user
+        ).exists()
+
     return render(request, 'order/order_detail.html', {
         'order': order,
         'items': items,
     })
+
 
 
 @login_required
@@ -564,16 +575,30 @@ def return_order_item(request, item_id):
     return render(request, 'order/return_order_item.html', {'item': item})
 
 
+@login_required
 def download_invoice(request, order_id):
     order = get_object_or_404(Order, id=order_id, user=request.user)
-    template_path = 'order/invoice.html'
-    context = {'order': order,
-               'items':order.items.all()}
+    items = order.items.select_related('product_variant__product').prefetch_related('product_variant__options__attribute')
+
+    context = {
+        'order': order,
+        'items': items,
+        'user': request.user,
+        'address': order.address,
+        'payment_method': order.payment_method,
+        'coupon': order.coupon,
+        'discount_amount': order.discount_amount,
+        'subtotal': sum(item.price * item.quantity for item in items),
+        'shipping_fee': Decimal('50.00') if order.total_price < 500 else Decimal('0.00'),
+        'tax': Decimal('0.05') * sum(item.price * item.quantity for item in items),
+        'total_price': order.total_price,
+        'created_at': order.created_at,
+    }
 
     response = HttpResponse(content_type='application/pdf')
     response['Content-Disposition'] = f'attachment; filename="Invoice_Order_{order.id}.pdf"'
 
-    template = get_template(template_path)
+    template = get_template('order/invoice.html')
     html = template.render(context)
 
     pisa_status = pisa.CreatePDF(html, dest=response)

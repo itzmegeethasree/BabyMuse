@@ -360,6 +360,7 @@ def address_book(request):
 
 @login_required
 def add_address(request):
+    next_url=request.GET.get('next') or request.POST.get('next')
     if request.method == 'POST':
         form = AddressForm(request.POST)
         if form.is_valid():
@@ -372,7 +373,7 @@ def add_address(request):
 
             address.save()
             messages.success(request, "Address added successfully.")
-            return redirect('user:address_book')
+            return redirect(next_url or 'user:address_book')
         else:
             messages.error(request, "Please correct the errors below.")
     else:
@@ -381,6 +382,7 @@ def add_address(request):
     return render(request, 'user/add_address.html', {
         'form': form,
         'title': '➕ Add Address',
+        'next_url':next_url,
     })
 
 

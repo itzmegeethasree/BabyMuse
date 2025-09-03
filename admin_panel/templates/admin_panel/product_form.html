@@ -235,14 +235,20 @@
       }
     });
 
-    // Remove previously generated rows
-    Array.from(tbody.querySelectorAll('.generated-variant-row')).forEach(row => row.remove());
-
+// Don't remove previously generated rows — just skip duplicates
+const generatedCombos = new Set();
+Array.from(tbody.querySelectorAll('tr')).forEach(row => {
+  const sizeInput = row.querySelector('input[name*="[size]"]');
+  const colorInput = row.querySelector('input[name*="[color]"]');
+  if (sizeInput && colorInput) {
+    generatedCombos.add(`${sizeInput.value}-${colorInput.value}`);
+  }
+});
     let rowIndex = tbody.querySelectorAll('tr').length;
     sizes.forEach(size => {
       colors.forEach(color => {
         const comboKey = `${size.value}-${color.value}`;
-        if (existingCombos.has(comboKey)) return;
+        if (generatedCombos.has(comboKey)) return;
 
         const sku = generateSKU(productName, size.textContent, color.textContent);
 

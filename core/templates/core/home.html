@@ -2,75 +2,65 @@
 {% load static %}
 
 {% block content %}
+
 <!-- Hero Section -->
-<section class="bg-gradient-to-r from-pink-100 to-purple-100 py-8 text-center">
+<section class="bg-gradient-to-r from-pink-100 to-purple-100 py-10 text-center">
   {% if request.user.is_authenticated %}
-  <h1 class="text-4xl font-bold text-pink-700">
-    Welcome back, {{ request.user.first_name|default:request.user.username }}!
-  </h1>
-  <p class="mt-4 text-gray-700">We've curated personalized picks for your baby.</p>
-  <a href="{% url 'shop' %}" class="mt-6 inline-block bg-pink-600 text-white px-6 py-3 rounded-full hover:bg-pink-700">
-    Shop Now
-  </a>
+    <h1 class="text-4xl font-bold text-pink-700">Welcome back, {{ request.user.first_name|default:request.user.username }}!</h1>
+    <p class="mt-4 text-gray-700">We've curated personalized picks for your baby.</p>
+    <a href="{% url 'shop' %}" class="mt-6 inline-block bg-pink-600 text-white px-6 py-3 rounded-full hover:bg-pink-700">Shop Now</a>
   {% else %}
-  <h1 class="text-4xl font-bold text-pink-700">Welcome to BabyMuse 👶</h1>
-  <p class="mt-4 text-gray-700">Discover gentle care and joyful essentials for your little one.</p>
-  <a href="{% url 'user:user_login' %}"
-    class="mt-6 inline-block bg-pink-600 text-white px-6 py-3 rounded-full hover:bg-pink-700">
-    Login to Personalize
-  </a>
+    <h1 class="text-4xl font-bold text-pink-700">Welcome to BabyMuse 👶</h1>
+    <p class="mt-4 text-gray-700">Discover gentle care and joyful essentials for your little one.</p>
+    <a href="{% url 'user:user_login' %}" class="mt-6 inline-block bg-pink-600 text-white px-6 py-3 rounded-full hover:bg-pink-700">Login to Personalize</a>
   {% endif %}
 </section>
 
 <!-- Banner Section -->
 {% if banners %}
-<section class="py-6 px-6 max-w-12xl mx-auto">
+<section class="py-8 px-6 max-w-7xl mx-auto">
   <div class="swiper">
     <div class="swiper-wrapper">
       {% for banner in banners %}
       <div class="swiper-slide">
-        <div class="relative rounded-xl overflow-hidden shadow">
-          <img src="{{ banner.image.url }}" alt="{{ banner.title }}" class="w-full h-48 object-cover">
-          <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4">
-            <h3 class="text-lg font-semibold text-blue">{{ banner.title }}</h3>
-            <p class="text-sm text-gray-200">{{ banner.description }}</p>
+        <a href="{{ banner.link|default:'#' }}">
+          <div class="relative rounded-xl overflow-hidden shadow">
+            <img src="{{ banner.image.url }}" alt="{{ banner.title }}" class="w-full h-48 object-cover">
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-4">
+              <h3 class="text-lg font-semibold text-white">{{ banner.title }}</h3>
+            </div>
           </div>
-        </div>
+        </a>
       </div>
+      {% endfor %}
     </div>
-    {% endfor %}
-  </div>
-
+    <div class="swiper-pagination mt-4"></div>
   </div>
 </section>
 {% endif %}
+
 <!-- Products Section -->
-<section class="py-10 px-6 max-w-6xl mx-auto">
+<section class="py-10 px-6 max-w-7xl mx-auto">
   <h2 class="text-2xl font-semibold text-gray-800 mb-6">
-    {% if customized %}
-    Recommended for You
-    {% else %}
-    Featured Products
-    {% endif %}
+    {% if customized %}Recommended for You{% else %}Featured Products{% endif %}
   </h2>
 
   <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
     {% for item in products %}
     {% with product=item.product variant=item.variant price=item.price %}
     <div class="bg-white p-4 rounded-xl shadow hover:shadow-lg transition relative group">
-      <img src="{{ product.images.all.0.image.url }}" class="w-full h-40 object-cover rounded" alt="{{ product.name }}">
+      <img src="{{ product.primary_image }}" class="w-full h-40 object-cover rounded" alt="{{ product.name }}">
       <h3 class="mt-2 font-medium text-gray-800 truncate">{{ product.name }}</h3>
       <p class="text-sm text-gray-500">{{ product.category.name }}</p>
       <p class="text-pink-600 font-semibold mt-1">₹{{ price }}</p>
 
       {% if variant %}
-      <p class="text-xs text-gray-400">Default: {{ variant.name }}</p>
+      <p class="text-xs text-gray-400">Default: {{ variant.sku }}</p>
       {% endif %}
 
       <div class="flex justify-between items-center mt-3 text-sm">
         <a href="{% url 'product_detail' product.id %}" class="text-pink-500 hover:underline">View</a>
       </div>
-
     </div>
     {% endwith %}
     {% empty %}
@@ -79,7 +69,16 @@
   </div>
 </section>
 
+<!-- Swiper JS -->
+<script src="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@9/swiper-bundle.min.css" />
+
 <script>
+  new Swiper('.swiper', {
+    loop: true,
+    autoplay: { delay: 4000 },
+    pagination: { el: '.swiper-pagination', clickable: true },
+  });
 
   function showToast(message) {
     const toast = document.createElement("div");
@@ -91,6 +90,6 @@
       setTimeout(() => toast.remove(), 500);
     }, 3000);
   }
-
 </script>
+
 {% endblock %}

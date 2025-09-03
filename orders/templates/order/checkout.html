@@ -44,7 +44,7 @@
       {% else %}
       <p class="text-gray-500">No addresses found.</p>
       {% endif %}
-      <a href="{% url 'user:add_address' %}" class="text-blue-600 underline text-sm">➕ Add Address</a>
+      <a href="{% url 'user:add_address' %}?next={{ request.path }}" class="text-blue-600 underline text-sm">➕ Add Address</a>
     </div>
 
     <!-- 🛒 Cart Items -->

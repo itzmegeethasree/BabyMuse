@@ -7,6 +7,8 @@ from django.views.decorators.http import require_POST
 import json
 from django.db.models import Avg
 
+from orders.models import OrderItem
+
 from .models import Product, Category, Wishlist, CartItem, Review, ProductVariant
 
 
@@ -378,3 +380,33 @@ def ajax_cart_data(request):
             'total': price,
         })
     return JsonResponse({"status": "success", "items": data, "total_price": total_price})
+
+
+
+# review
+
+@login_required
+def add_review_from_order_item(request, item_id):
+    item = get_object_or_404(OrderItem, id=item_id, order__user=request.user)
+
+    if item.status not in ['Delivered', 'Completed']:
+        messages.error(request, "You can only review items that have been delivered.")
+        return redirect('orders:order_detail', order_id=item.order.id)
+
+    if Review.objects.filter(product=item.product, user=request.user).exists():
+        messages.error(request, "You've already reviewed this product.")
+        return redirect('orders:order_detail', order_id=item.order.id)
+
+    if request.method == 'POST':
+        rating = request.POST.get('rating')
+        comment = request.POST.get('comment', '')
+        Review.objects.create(
+            product=item.product,
+            user=request.user,
+            rating=rating,
+            comment=comment
+        )
+        messages.success(request, "Thank you for your review!")
+        return redirect('orders:order_detail', order_id=item.order.id)
+
+    return render(request, 'order/add_review.html', {'item': item})

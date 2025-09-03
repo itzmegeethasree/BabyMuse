@@ -1004,12 +1004,14 @@ def banner_list(request):
 
 @admin_login_required
 def banner_create(request):
-    form = BannerForm(request.POST or None, request.FILES or None)
-    if form.is_valid():
-        form.save()
-        return redirect('admin_panel:banner_list')
+    if request.method == 'POST':
+        form = BannerForm(request.POST, request.FILES)
+        if form.is_valid():
+            form.save()
+            return redirect('admin_panel:banner_list')
+    else:
+        form = BannerForm()
     return render(request, 'admin_panel/banner_form.html', {'form': form, 'action': 'Create'})
-
 
 @admin_login_required
 def banner_edit(request, banner_id):
@@ -1019,6 +1021,8 @@ def banner_edit(request, banner_id):
     if form.is_valid():
         form.save()
         return redirect('admin_panel:banner_list')
+    else:
+        print(form.errors)  
     return render(request, 'admin_panel/banner_form.html', {'form': form, 'action': 'Edit', 'banner': banner})
 
 
