@@ -55,6 +55,9 @@ class BabyProfile(models.Model):
             delta = date.today() - self.baby_dob
             return delta.days // 30
         return None
+    def __str__(self):
+        return self.baby_name or "Unnamed Baby"
+
 
 
 class Address(models.Model):

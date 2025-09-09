@@ -1,5 +1,5 @@
 from django.forms import inlineformset_factory
-from core.models import Banner
+from core.models import FAQ, Banner
 from shop.models import Brand, Product, ProductVariant, Category, VariantOption
 from django import forms
 from .widgets import MultiFileInput
@@ -269,3 +269,35 @@ class BrandForm(forms.ModelForm):
             'name': forms.TextInput(attrs={'class': 'form-control'}),
             'is_active': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
+
+
+class FAQForm(forms.ModelForm):
+    class Meta:
+        model = FAQ
+        fields = ['question', 'answer', 'is_active']
+        widgets = {
+            'question': forms.TextInput(attrs={
+                'class': 'w-full px-4 py-2 border rounded focus:ring focus:ring-pink-200',
+                'placeholder': 'Enter the question'
+            }),
+            'answer': forms.Textarea(attrs={
+                'class': 'w-full px-4 py-2 border rounded focus:ring focus:ring-pink-200',
+                'placeholder': 'Provide a clear, helpful answer',
+                'rows': 5
+            }),
+            'is_active': forms.CheckboxInput(attrs={
+                'class': 'form-checkbox text-pink-500'
+            }),
+        }
+
+    def clean_question(self):
+        question = self.cleaned_data.get('question')
+        if FAQ.objects.filter(question__iexact=question).exists():
+            raise forms.ValidationError("This question already exists.")
+        return question
+
+    def clean_answer(self):
+        answer = self.cleaned_data.get('answer')
+        if len(answer.strip()) < 10:
+            raise forms.ValidationError("Answer must be at least 10 characters long.")
+        return answer

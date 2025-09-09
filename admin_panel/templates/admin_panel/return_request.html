@@ -42,11 +42,9 @@
                 ₹{% with total=0 %}
                 {% for item in request.order.items.all %}
                 {% if item.status == "Returned" %}
-                {% widthratio item.subtotal 1 1 as subtotal %}
-                {% widthratio total|add:subtotal 1 1 as total %}
+                {{ item.subtotal}}
                 {% endif %}
                 {% endfor %}
-                {{ total }}
                 {% endwith %}
             </td>
 

@@ -103,6 +103,11 @@ urlpatterns = [
     path('brands/<int:brand_id>/edit/', views.update_brand, name='update_brand'),
     path('brands/<int:brand_id>/delete/', views.delete_brand, name='delete_brand'),
 
+    #FAQ
+    path('admin/faqs/', views.faq_list_view, name='faq_list'),
+     path('admin/faqs/add/', views.faq_form_view, name='faq_add'),
+     path('admin/faqs/edit/<int:pk>/', views.faq_form_view, name='faq_edit'),
+
 
 
 ]

@@ -1,5 +1,5 @@
 from user.models import WalletTransaction
-from core.models import Banner
+from core.models import FAQ, Banner
 from orders.models import OrderItem, ORDER_STATUS
 from admin_panel.decorators import admin_login_required
 from django.shortcuts import get_object_or_404, redirect
@@ -1076,3 +1076,32 @@ def delete_brand(request, brand_id):
         brand.delete()
         return redirect('admin_panel:brand_list')
     return render(request, 'admin_panel/brand_confirm_delete.html', {'brand': brand})
+
+
+#FAQ 
+@admin_login_required
+def faq_list_view(request):
+    faqs = FAQ.objects.all().order_by('-id')
+    return render(request, 'admin_panel/faq_list.html', {'faqs': faqs, 'title': 'Manage FAQs'})
+
+
+@admin_login_required
+def faq_form_view(request, pk=None):
+    faq = get_object_or_404(FAQ, pk=pk) if pk else None
+    if request.method == 'POST':
+        question = request.POST.get('question')
+        answer = request.POST.get('answer')
+        is_active = bool(request.POST.get('is_active'))
+
+        if faq:
+            faq.question = question
+            faq.answer = answer
+            faq.is_active = is_active
+            faq.save()
+        else:
+            FAQ.objects.create(question=question, answer=answer, is_active=is_active)
+
+        messages.success(request, 'FAQ saved successfully.')
+        return redirect('admin_panel:faq_list')
+
+    return render(request, 'admin_panel/faq_form.html', {'faq': faq, 'title': 'Edit FAQ' if faq else 'Add FAQ'})
