@@ -115,12 +115,12 @@ def otp_signup_request(request):
             timezone.now() + timedelta(minutes=2)).isoformat()
         print(f"🔐 OTP for {email} is: {otp}")
 
-    # send_mail(
-    #     subject='Your OTP for BabyMuse Signup',
-    #     message=f'Your OTP is {otp_obj.otp}',
-    #     from_email='your_email@gmail.com',
-    #     recipient_list=[email],
-    # )
+        send_mail(
+        subject='Your OTP for BabyMuse Signup',
+        message=f'Your OTP is {otp}',
+        from_email=settings.EMAIL_HOST_USER,  # <-- Use the authenticated email address
+        recipient_list=[email],
+    )
 
         return redirect('user:verify_otp')
     return render(request, 'user/otp_request.html')
@@ -435,13 +435,13 @@ def forgot_password(request):
                 timezone.now() + timedelta(minutes=1)).isoformat()
             print(f"📧 Email change OTP for {email} is: {otp}")
 
-            # send_mail(
-            #     'Your BabyMuse Password Reset OTP',
-            #     f'Hello {user.first_name},\n\nYour OTP for password reset is: {otp}\n\nThis OTP is valid for 2 minutes.',
-            #     'noreply@babymuse.com',
-            #     [email],
-            #     fail_silently=False,
-            # )
+            send_mail(
+                'Your BabyMuse Password Reset OTP',
+                f'Hello {user.first_name},\n\nYour OTP for password reset is: {otp}\n\nThis OTP is valid for 2 minutes.',
+                settings.EMAIL_HOST_USER,  # <-- Use the authenticated email address
+                [email],
+                fail_silently=False,
+            )
             return redirect('user:verify_reset_otp')
         except User.DoesNotExist:
             messages.error(request, "No user found with this email.")
@@ -478,13 +478,13 @@ def resend_reset_otp(request):
                 timezone.now() + timedelta(minutes=1)).isoformat()
             print(f"📧 Email change OTP for {email} is: {otp}")
 
-            # send_mail(
-            #     'Your New OTP for BabyMuse Password Reset',
-            #     f'Hello {user.first_name},\n\nYour new OTP is: {otp}\n\nIt is valid for 2 minutes.',
-            #     'noreply@babymuse.com',
-            #     [email],
-            #     fail_silently=False,
-            # )
+            send_mail(
+                'Your New OTP for BabyMuse Password Reset',
+                f'Hello {user.first_name},\n\nYour new OTP is: {otp}\n\nIt is valid for 2 minutes.',
+               settings.EMAIL_HOST_USER,  # <-- Use the authenticated email address
+                [email],
+                fail_silently=False,
+            )
             messages.success(request, 'New OTP sent.')
         except:
             messages.error(request, 'Failed to resend OTP.')
