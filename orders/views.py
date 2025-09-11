@@ -101,7 +101,7 @@ def checkout_view(request):
         except Exception:
             pass
 
-    total = subtotal + shipping + tax - discount
+    total = subtotal + shipping + tax-discount 
 
     addresses = Address.objects.filter(user=user)
     default_address = addresses.filter(is_default=True).first()
