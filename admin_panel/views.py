@@ -603,7 +603,7 @@ def admin_orders(request):
     })
 
 
-ORDER_FLOW = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Completed']
+ORDER_FLOW = ['Pending', 'Processing', 'Shipped', 'Delivered', 'Cancelled','Returned','Completed']
 
 
 @admin_login_required
