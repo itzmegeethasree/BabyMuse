@@ -6,7 +6,7 @@
 <!-- Hero Section -->
 <section class="bg-gradient-to-r from-pink-100 to-purple-100 py-10 text-center">
   {% if request.user.is_authenticated %}
-    <h1 class="text-4xl font-bold text-pink-700">Welcome back, {{ request.user.first_name|default:request.user.username }}!</h1>
+    <h1 class="text-4xl font-bold text-pink-700"> HI !!.. Welcome back, {{ request.user.first_name|default:request.user.username }}!</h1>
     <p class="mt-4 text-gray-700">We've curated personalized picks for your baby.</p>
     <a href="{% url 'shop' %}" class="mt-6 inline-block bg-pink-600 text-white px-6 py-3 rounded-full hover:bg-pink-700">Shop Now</a>
   {% else %}
