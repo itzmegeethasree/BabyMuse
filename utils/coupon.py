@@ -18,8 +18,6 @@ def validate_coupon(code, cart_total):
     # Check minimum cart amount
     if cart_total < coupon.minimum_amount:
         return None, f"Minimum order amount for this coupon is ₹{coupon.minimum_amount}."
-    if cart_total < 2000:
-        return None, f"Minimum order amount for this coupon is ₹2000."
 
     # Check usage limit
     if coupon.usage_limit is not None and coupon.times_used >= coupon.usage_limit:
