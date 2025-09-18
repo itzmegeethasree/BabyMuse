@@ -302,12 +302,12 @@ def ajax_add_to_cart(request):
 @require_POST
 def ajax_remove_from_cart(request):
     data = json.loads(request.body)
-    product_id = data.get("product_id")
+    product_id = data.get("variant_id")
     try:
-        item = CartItem.objects.get(user=request.user, product_id=product_id)
+        item = CartItem.objects.get(user=request.user, product_variant=product_id)
         item.delete()
         total_price = sum(
-            i.quantity * i.product.price for i in CartItem.objects.filter(user=request.user)
+            i.quantity * i.product_variant.get_offer_price() for i in CartItem.objects.filter(user=request.user)
         )
         return JsonResponse({"status": "success", "message": "Item removed from cart", "new_total_price": total_price})
     except CartItem.DoesNotExist:
