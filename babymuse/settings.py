@@ -25,6 +25,14 @@ AUTH_USER_MODEL = 'user.CustomUser'
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
+AWS_ACCESS_KEY_ID=config('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY=config('AWS_SECRET_ACCESS_KEY')
+AWS_STORAGE_BUCKET_NAME=config('AWS_STORAGE_BUCKET_NAME')
+AWS_S3_REGION_NAME='ap-south-1'
+AWS_S3_SIGNATURE_VERSION='s3v4'
+AWS_S3_FILE_OVERWRITE=False
+
+DEFAULT_FILE_STORAGE='storages.backends.s3boto3.S3Boto3Storage'
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config("SECRET_KEY")
@@ -52,6 +60,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'social_django',
     'widget_tweaks',
+    'storages',
 
 ]
 
@@ -143,11 +152,12 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
 STATIC_URL = '/static/'
-MEDIA_URL = '/media/'
+#MEDIA_URL = '/media/'
 
 
 STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+#MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
 
 
 # Default primary key field type
